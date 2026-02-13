@@ -1,10 +1,10 @@
 # Dependencies
 node_modules/
 
-# Environment (secrets)
-.env
-.env.local
-.env.*.local
+# Environment (secrets) – match in any subdirectory
+**/.env
+**/.env.local
+**/.env.*.local
 
 # Build output
 dist/
@@ -21,6 +21,3 @@ yarn-error.log*
 .idea
 .vscode/
 
-.env.example
-.env.local
-.env
