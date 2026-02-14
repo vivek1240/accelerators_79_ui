@@ -97,14 +97,27 @@ router.post('/login', async (req, res) => {
 router.get('/users', requireAuth, requireAdmin, async (req, res) => {
   try {
     const users = await User.find({}).sort({ createdAt: -1 }).lean();
-    const list = users.map((u) => ({
-      user_id: u._id.toString(),
-      email: u.email,
-      name: u.name ?? null,
-      role: u.role || 'user',
-      is_allowed: u.is_allowed ?? false,
-      created_at: u.createdAt ? u.createdAt.toISOString() : null,
-    }));
+    const list = users.map((u) => {
+      // Handle createdAt whether it's a Date object, string, or MongoDB $date format
+      let createdAt = null;
+      if (u.createdAt) {
+        if (typeof u.createdAt.toISOString === 'function') {
+          createdAt = u.createdAt.toISOString();
+        } else if (u.createdAt.$date) {
+          createdAt = u.createdAt.$date;
+        } else {
+          createdAt = String(u.createdAt);
+        }
+      }
+      return {
+        user_id: u._id.toString(),
+        email: u.email,
+        name: u.name ?? null,
+        role: u.role || 'user',
+        is_allowed: u.is_allowed ?? false,
+        created_at: createdAt,
+      };
+    });
     return res.json(list);
   } catch (err) {
     console.error('List users error:', err);
