@@ -15,7 +15,7 @@ import { UserBubble, AssistantBubble, SystemBubble } from './components/MessageB
 const TAB_LABELS = {
   edgar: 'EDGAR',
   extract: 'Extract',
-  rag: 'RAG',
+  rag: 'Advanced chatbot',
   admin: 'Admin',
 };
 
@@ -197,8 +197,8 @@ export default function App() {
         }));
         showToast(
           res.data.chatbot_status === 'ingesting'
-            ? 'PDF uploaded. RAG will be ready when ingestion finishes.'
-            : 'PDF uploaded. Ready for Extract and RAG.'
+            ? 'PDF uploaded. Advanced chatbot will be ready when ingestion finishes.'
+            : 'PDF uploaded. Ready for Extract and Advanced chatbot.'
         );
         if (res.data.chatbot_status === 'ingesting') pollStatus(fid);
       } catch (e) {
@@ -270,9 +270,9 @@ export default function App() {
         }
       } else if (activeTab === 'rag') {
         if (!fileId) {
-          showToast('Upload a PDF in the sidebar first to use RAG', true);
+          showToast('Upload a PDF in the sidebar first to use Advanced chatbot', true);
         } else if (!chatbotReady) {
-          showToast('Document is still ingesting. RAG will be available when ready.', true);
+          showToast('Document is still ingesting. Advanced chatbot will be available when ready.', true);
         } else {
           try {
             const queryRes = await api.query(fileId, q);
@@ -320,7 +320,7 @@ export default function App() {
       const m = msgs[i];
       if (m?.type === 'edgar') return 'EDGAR';
       if (m?.type === 'extractor_flow') return 'Extract';
-      if (m?.type === 'query') return 'RAG';
+      if (m?.type === 'query') return 'Advanced chatbot';
     }
     return TAB_LABELS[activeTab] || null;
   }, [activeTab, currentMessages]);
@@ -364,7 +364,6 @@ export default function App() {
         filename={filename}
         onPdfUpload={handlePdfUpload}
         uploading={uploading}
-        onNewChat={handleNewChat}
         onLogout={handleLogout}
         userEmail={user.email}
         userRole={user.role}
@@ -377,7 +376,7 @@ export default function App() {
                 <div className="welcome-card">
                   <h2 className="welcome-title">EDGAR</h2>
                   <p className="welcome-text">
-                    Ask for SEC financials by company and years (e.g. Apple 10-K last 3 years).
+                    Get data for publicly listed companies. Ask for SEC financials by company and years (e.g. Apple 10-K last 3 years).
                   </p>
                 </div>
               )}
@@ -401,10 +400,9 @@ export default function App() {
             <>
               {!fileId && (
                 <div className="welcome-card">
-                  <h2 className="welcome-title">Extract tables</h2>
+                  <h2 className="welcome-title">Extract</h2>
                   <p className="welcome-text">
-                    Upload a PDF in the left sidebar. Then use this flow to select pages and extract
-                    tables.
+                    Extract tables from PDF pages. Upload a PDF in the left sidebar, then select pages and extract tables.
                   </p>
                 </div>
               )}
@@ -453,13 +451,14 @@ export default function App() {
             <>
               {currentMessages.length === 0 && !loading && (
                 <div className="welcome-card">
-                  <h2 className="welcome-title">RAG · Document Q&A</h2>
+                  <h2 className="welcome-title">Advanced chatbot</h2>
                   <p className="welcome-text">
+                    Ask questions about your document.
                     {fileId
                       ? chatbotReady
-                        ? 'Ask questions about your uploaded document.'
-                        : 'Document is still ingesting. You can ask when ready.'
-                      : 'Upload a PDF in the left sidebar to ask questions about it.'}
+                        ? ' Your document is ready—ask anything about it.'
+                        : ' Document is still ingesting. You can ask when ready.'
+                      : ' Upload a PDF in the left sidebar to get started.'}
                   </p>
                 </div>
               )}
@@ -606,7 +605,7 @@ function MessageBlock({
   }
   if (msg.type === 'query' && msg.data) {
     return (
-      <AssistantBubble routeTag="RAG" copyText={msg.data.answer}>
+      <AssistantBubble routeTag="Advanced chatbot" copyText={msg.data.answer}>
         <div className="output-card">
           <QueryAnswer
             question={msg.data.question}

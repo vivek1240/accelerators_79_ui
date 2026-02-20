@@ -83,7 +83,7 @@ function RightPanel({
                   {chatbotReady && !chatbotProcessing && (
                     <div className="right-panel-status right-panel-status-completed">
                       <span className="right-panel-status-dot" />
-                      <span>Ready for RAG</span>
+                      <span>Ready for Advanced chatbot</span>
                     </div>
                   )}
                 </div>

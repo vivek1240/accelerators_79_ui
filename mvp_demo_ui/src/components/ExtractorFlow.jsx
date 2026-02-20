@@ -40,10 +40,15 @@ export default function ExtractorFlow({ fileId, onError, showResultsInWorkspace 
         await Promise.all(
           list.map(async (p) => {
             try {
+              // Preview image = by list index (doc[page_index]). page_number from server is for display label only.
               const blob = await getPagePreview(fileId, p.page_index);
-              const url = URL.createObjectURL(blob);
-              blobUrlsRef.current[p.page_index] = url;
-              urls[p.page_index] = url;
+              if (blob instanceof Blob) {
+                const url = URL.createObjectURL(blob);
+                blobUrlsRef.current[p.page_index] = url;
+                urls[p.page_index] = url;
+              } else {
+                urls[p.page_index] = null;
+              }
             } catch {
               urls[p.page_index] = null;
             }
@@ -108,7 +113,10 @@ export default function ExtractorFlow({ fileId, onError, showResultsInWorkspace 
         <>
           {loadingPreviews && <p className="extractor-flow-loading">Loading previews…</p>}
           <div className="extractor-flow-pages-grid">
-            {pages.map((p) => (
+            {pages.map((p) => {
+              const displayPageNum = typeof p.page_number === 'number' && p.page_number >= 1 ? p.page_number : null;
+              const pageLabel = displayPageNum != null ? `Page ${displayPageNum}` : 'Page ?';
+              return (
               <label key={p.page_index} className={`extractor-flow-page-card ${selected.has(p.page_index) ? 'extractor-flow-page-card-selected' : ''}`}>
                 <input
                   type="checkbox"
@@ -118,14 +126,14 @@ export default function ExtractorFlow({ fileId, onError, showResultsInWorkspace 
                 />
                 <div className="extractor-flow-page-preview-wrap">
                   {previewUrls[p.page_index] ? (
-                    <img src={previewUrls[p.page_index]} alt={`Page ${p.page_number}`} className="extractor-flow-page-preview-img" />
+                    <img src={previewUrls[p.page_index]} alt={pageLabel} className="extractor-flow-page-preview-img" />
                   ) : (
                     <div className="extractor-flow-page-preview-placeholder">Preview</div>
                   )}
                 </div>
-                <span className="extractor-flow-page-number">Page {p.page_number}</span>
+                <span className="extractor-flow-page-number">{pageLabel}</span>
               </label>
-            ))}
+            );})}
           </div>
           <div className="extractor-flow-actions">
             <button type="button" className="btn-primary" onClick={runExtract} disabled={loadingExtract || selected.size === 0}>

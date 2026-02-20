@@ -149,6 +149,12 @@ export async function getPagePreview(fileId, pageIndex) {
   return data;
 }
 
+/** Preview by 1-based PDF page number (use when list index != PDF page) */
+export async function getPagePreviewByNumber(fileId, pageNumber) {
+  const { data } = await api.get(`/pages/${fileId}/preview-by-page/${pageNumber}`, { responseType: 'blob' });
+  return data;
+}
+
 export async function extract(fileId, pageIndices) {
   const { data } = await api.post('/extract', { file_id: fileId, page_indices: pageIndices });
   return data;

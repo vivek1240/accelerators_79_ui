@@ -92,6 +92,21 @@ router.get('/pages/:file_id', requireAllowedForProxy, async (req, res) => {
   }
 });
 
+/** GET /pages/:file_id/preview-by-page/:page_number (returns blob; 1-based PDF page) */
+router.get('/pages/:file_id/preview-by-page/:page_number', requireAllowedForProxy, async (req, res) => {
+  try {
+    const r = await fastapi.get(
+      `/pages/${req.params.file_id}/preview-by-page/${req.params.page_number}`,
+      { responseType: 'arraybuffer' }
+    );
+    const contentType = r.headers['content-type'] || 'application/octet-stream';
+    res.set('Content-Type', contentType);
+    res.send(Buffer.from(r.data));
+  } catch (err) {
+    res.status(err.response?.status || 502).send(err.response?.data ?? '');
+  }
+});
+
 /** GET /pages/:file_id/:page_index/preview (returns blob) */
 router.get('/pages/:file_id/:page_index/preview', requireAllowedForProxy, async (req, res) => {
   try {

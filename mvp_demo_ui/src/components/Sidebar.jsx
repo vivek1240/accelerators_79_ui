@@ -1,10 +1,10 @@
 /**
- * Left sidebar: PDF upload, flow tabs (Edgar / Extract / RAG), workspace doc indicator.
+ * Left sidebar: PDF upload, flow tabs (EDGAR / Extract / Advanced chatbot), workspace doc indicator.
  */
 const TABS = [
-  { id: 'edgar', label: 'EDGAR', description: 'SEC financials' },
-  { id: 'extract', label: 'Extract', description: 'Table extraction' },
-  { id: 'rag', label: 'RAG', description: 'Document Q&A' },
+  { id: 'edgar', label: 'EDGAR', description: 'Get data for publicly listed companies' },
+  { id: 'extract', label: 'Extract', description: 'Extract tables from PDF pages' },
+  { id: 'rag', label: 'Advanced chatbot', description: 'Ask questions about your document' },
 ];
 
 const ADMIN_TAB = { id: 'admin', label: 'Admin', description: 'User access' };
@@ -27,7 +27,7 @@ export default function Sidebar({
     <aside className={`sidebar ${className}`}>
       <div className="sidebar-brand">
         <span className="sidebar-brand-icon">◇</span>
-        <span className="sidebar-brand-name">Agentic Router</span>
+        <span className="sidebar-brand-name">Accelerate79ers</span>
       </div>
       {userEmail && (
         <div className="sidebar-user">
@@ -36,7 +36,7 @@ export default function Sidebar({
       )}
 
       <div className="sidebar-section sidebar-upload-section">
-        <div className="sidebar-label">PDF (Extract & RAG)</div>
+        <div className="sidebar-label">PDF (Extract & Advanced chatbot)</div>
         <label className="sidebar-upload-area">
           <input
             type="file"
@@ -56,13 +56,6 @@ export default function Sidebar({
         </label>
       </div>
 
-      {onNewChat && (
-        <button type="button" className="sidebar-new-chat" onClick={onNewChat}>
-          <span className="sidebar-new-icon">+</span>
-          New chat
-        </button>
-      )}
-
       <nav className="sidebar-nav">
         <div className="sidebar-section">
           <div className="sidebar-label">Flows</div>
@@ -73,9 +66,15 @@ export default function Sidebar({
                   type="button"
                   className={`sidebar-item sidebar-tab ${activeTab === tab.id ? 'sidebar-item-active' : ''}`}
                   onClick={() => onTabChange?.(tab.id)}
+                  title={tab.description}
                 >
-                  <span className="sidebar-item-icon">◇</span>
-                  <span className="sidebar-item-title">{tab.label}</span>
+                  <span className="sidebar-tab-row">
+                    <span className="sidebar-item-icon">◇</span>
+                    <span className="sidebar-item-title">{tab.label}</span>
+                  </span>
+                  {tab.description && (
+                    <span className="sidebar-item-desc">{tab.description}</span>
+                  )}
                 </button>
               </li>
             ))}

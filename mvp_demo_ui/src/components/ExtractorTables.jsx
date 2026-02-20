@@ -54,10 +54,11 @@ function OneTable({ tbl }) {
   const meta = tbl.table_metadata || data?.table_metadata;
   const tableType = meta?.table_type || 'tabular';
 
+  // Display: use only LlamaParse page_number; index is for extraction only.
   if (!data) {
     return (
       <div className="extract-table-wrap">
-        <div className="extract-table-header">Page {tbl.page_number} — Extraction failed</div>
+        <div className="extract-table-header">Page {tbl.page_number >= 1 ? tbl.page_number : '?'} — Extraction failed</div>
       </div>
     );
   }
@@ -68,7 +69,7 @@ function OneTable({ tbl }) {
     return (
       <div className="extract-table-wrap">
         <div className="extract-table-header">
-          <span>Page {tbl.page_number}</span>
+          <span>Page {tbl.page_number >= 1 ? tbl.page_number : '?'}</span>
           {meta?.table_title && <span className="extract-table-meta">{meta.table_title}</span>}
         </div>
         <div className="extract-text-only">
@@ -90,7 +91,7 @@ function OneTable({ tbl }) {
   return (
     <div className="extract-table-wrap">
       <div className="extract-table-header">
-        <span>Page {tbl.page_number}</span>
+        <span>Page {tbl.page_number >= 1 ? tbl.page_number : '?'}</span>
         {meta?.table_title && <span className="extract-table-meta">{meta.table_title}</span>}
       </div>
       <div className="extract-table-scroll">
