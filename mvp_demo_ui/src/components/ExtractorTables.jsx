@@ -25,6 +25,18 @@ function normalizeExtractData(data) {
     if (periodKeys.length === 0 && data.rows[0]?.values && typeof data.rows[0].values === 'object') {
       periodKeys = Object.keys(data.rows[0].values);
     }
+    // generic_table: row.values keys are column names (e.g. park names), not period years
+    const firstRowKeys = data.rows[0]?.values && typeof data.rows[0].values === 'object' ? Object.keys(data.rows[0].values) : [];
+    if (firstRowKeys.length > 0 && periodKeys.length > 0) {
+      const hasOverlap = periodKeys.some((pk) => data.rows.some((r) => r.values && pk in (r.values || {})));
+      if (!hasOverlap) {
+        const allKeys = [];
+        data.rows.forEach((r) => {
+          Object.keys(r.values || {}).forEach((k) => { if (!allKeys.includes(k)) allKeys.push(k); });
+        });
+        periodKeys = allKeys;
+      }
+    }
     return { rows: data.rows, periodLabels: periodKeys };
   }
   const sections = data.sections || [];
@@ -84,6 +96,20 @@ function OneTable({ tbl }) {
             </div>
           ))}
         </div>
+        {(meta?.summary || (meta?.key_insights && meta.key_insights.length > 0)) && (
+          <div className="extract-table-meta-block">
+            {meta.summary && (
+              <p className="extract-table-summary">{meta.summary}</p>
+            )}
+            {meta.key_insights && meta.key_insights.length > 0 && (
+              <ul className="extract-table-key-insights">
+                {meta.key_insights.map((insight, i) => (
+                  <li key={i}>{insight}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -110,7 +136,7 @@ function OneTable({ tbl }) {
                 <td className="extract-td">{row.label}</td>
                 {periodLabels.map((key) => {
                   const val = row.values?.[key];
-                  const display = val != null && val !== '' ? (typeof val === 'number' ? (Number.isInteger(val) ? String(val) : String(val)) : String(val)) : '—';
+                  const display = val != null && val !== '' ? String(val) : '—';
                   return (
                     <td key={key} className="extract-td extract-td-value">
                       {display}
@@ -122,6 +148,20 @@ function OneTable({ tbl }) {
           </tbody>
         </table>
       </div>
+      {(meta?.summary || (meta?.key_insights && meta.key_insights.length > 0)) && (
+        <div className="extract-table-meta-block">
+          {meta.summary && (
+            <p className="extract-table-summary">{meta.summary}</p>
+          )}
+          {meta.key_insights && meta.key_insights.length > 0 && (
+            <ul className="extract-table-key-insights">
+              {meta.key_insights.map((insight, i) => (
+                <li key={i}>{insight}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }

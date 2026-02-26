@@ -202,6 +202,17 @@ export async function exportExtractToExcel(extractedTables, fileId = 'extract') 
       if (periodKeys.length === 0 && data.rows[0]?.values && typeof data.rows[0].values === 'object') {
         periodKeys = Object.keys(data.rows[0].values);
       }
+      const firstRowKeys = data.rows[0]?.values && typeof data.rows[0].values === 'object' ? Object.keys(data.rows[0].values) : [];
+      if (firstRowKeys.length > 0 && periodKeys.length > 0) {
+        const hasOverlap = periodKeys.some((pk) => data.rows.some((r) => r.values && pk in (r.values || {})));
+        if (!hasOverlap) {
+          const allKeys = [];
+          data.rows.forEach((r) => {
+            Object.keys(r.values || {}).forEach((k) => { if (!allKeys.includes(k)) allKeys.push(k); });
+          });
+          periodKeys = allKeys;
+        }
+      }
       rows = data.rows;
     } else {
       const sections = data.sections || [];

@@ -264,6 +264,7 @@ button:disabled {
   border: 1px solid var(--border);
   overflow: hidden;
   margin-bottom: 20px;
+  max-width: 100%;
 }
 .extract-table-header {
   padding: 14px 18px;
@@ -276,13 +277,41 @@ button:disabled {
   font-size: 13px;
   color: var(--text-muted);
 }
+.extract-table-meta-block {
+  padding: 14px 18px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface);
+  max-width: 720px;
+  box-sizing: border-box;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  white-space: normal;
+}
+.extract-table-summary {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.extract-table-key-insights {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.extract-table-key-insights li {
+  margin-bottom: 4px;
+}
 .extract-table-scroll {
   overflow-x: auto;
+  max-width: 100%;
 }
 .extract-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
+  table-layout: auto;
 }
 .extract-th {
   padding: 12px 16px;
@@ -291,6 +320,11 @@ button:disabled {
   color: var(--text-muted);
   font-weight: 500;
   border-bottom: 1px solid var(--border);
+  max-width: 200px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  white-space: normal;
 }
 .extract-td {
   padding: 12px 16px;
@@ -793,11 +827,11 @@ button:disabled {
   background: var(--border);
 }
 
-/* Workspace detail — vertical scroll only; width follows table so all columns visible */
+/* Workspace detail — table stays in view; scroll inside table card only */
 .workspace-detail {
   flex: 1;
   min-height: 0;
-  min-width: min-content;
+  min-width: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -805,17 +839,17 @@ button:disabled {
 .workspace-detail-inner {
   flex: 1;
   min-height: 0;
-  width: max-content;
-  min-width: 100%;
-  overflow-x: auto;
+  min-width: 0;
+  width: 100%;
   overflow-y: auto;
+  overflow-x: hidden;
   padding-right: var(--space-2);
 }
 .workspace-detail-tables .edgar-tables-container,
 .workspace-detail-tables .extract-tables-container {
   margin-top: 0;
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
+  max-width: 100%;
 }
 .workspace-detail-tables .edgar-tables-toolbar,
 .workspace-detail-tables .extract-tables-toolbar {
@@ -826,7 +860,9 @@ button:disabled {
 }
 .workspace-detail-tables .edgar-table-scroll,
 .workspace-detail-tables .extract-table-scroll {
-  overflow: visible;
+  overflow-x: auto;
+  overflow-y: visible;
+  max-width: 100%;
 }
 .workspace-detail-tables .edgar-table,
 .workspace-detail-tables .extract-table {
@@ -834,7 +870,8 @@ button:disabled {
   min-width: 100%;
   table-layout: auto;
 }
-.workspace-detail-tables .edgar-table td:first-child {
+.workspace-detail-tables .edgar-table td:first-child,
+.workspace-detail-tables .extract-table td:first-child {
   max-width: 260px;
   white-space: normal;
   word-break: break-word;
@@ -856,6 +893,14 @@ button:disabled {
 .workspace-detail-tables .edgar-statement-wrap,
 .workspace-detail-tables .extract-table-wrap {
   margin-bottom: var(--space-6);
+  max-width: 100%;
+}
+.workspace-detail-tables .extract-table thead th {
+  max-width: 200px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  white-space: normal;
 }
 .workspace-detail-tables .edgar-th,
 .workspace-detail-tables .edgar-td,
