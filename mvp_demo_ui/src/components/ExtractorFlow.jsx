@@ -10,7 +10,16 @@ export default function ExtractorFlow({ fileId, onError, showResultsInWorkspace 
   const [loadingExtract, setLoadingExtract] = useState(false);
   const [previewUrls, setPreviewUrls] = useState({});
   const [loadingPreviews, setLoadingPreviews] = useState(false);
+  const [extractProgress, setExtractProgress] = useState(0);
+  const [extractTipIndex, setExtractTipIndex] = useState(0);
   const blobUrlsRef = useRef({});
+
+  const extractTips = [
+    'Locating tables and headers in your document…',
+    'Normalizing rows and columns into a structured view…',
+    'Aligning periods and totals so numbers add up…',
+    'Collecting metadata to help you audit later…',
+  ];
 
   useEffect(() => {
     return () => {
@@ -20,6 +29,32 @@ export default function ExtractorFlow({ fileId, onError, showResultsInWorkspace 
       blobUrlsRef.current = {};
     };
   }, []);
+
+  useEffect(() => {
+    if (!loadingExtract) {
+      setExtractProgress(0);
+      return;
+    }
+    setExtractProgress(10);
+    setExtractTipIndex(0);
+
+    const progressInterval = setInterval(() => {
+      setExtractProgress((prev) => {
+        if (prev >= 92) return prev;
+        const next = prev + Math.random() * 8;
+        return next > 92 ? 92 : next;
+      });
+    }, 600);
+
+    const tipInterval = setInterval(() => {
+      setExtractTipIndex((prev) => (prev + 1) % extractTips.length);
+    }, 2600);
+
+    return () => {
+      clearInterval(progressInterval);
+      clearInterval(tipInterval);
+    };
+  }, [loadingExtract]);
 
   const loadPages = async () => {
     Object.values(blobUrlsRef.current).forEach((url) => {
@@ -83,6 +118,7 @@ export default function ExtractorFlow({ fileId, onError, showResultsInWorkspace 
       return;
     }
     setLoadingExtract(true);
+    setExtractProgress(10);
     setExtracted(null);
     try {
       const res = await extract(fileId, Array.from(selected));
@@ -97,7 +133,13 @@ export default function ExtractorFlow({ fileId, onError, showResultsInWorkspace 
       onError?.(e?.response?.data?.detail?.message || e?.message || 'Extraction failed');
     } finally {
       setLoadingExtract(false);
+      setExtractProgress(100);
     }
+  };
+
+  const handleOpenInWorkspace = () => {
+    if (!showResultsInWorkspace || !onExtractionComplete || !extracted || !extracted.length) return;
+    onExtractionComplete(extracted);
   };
 
   return (
@@ -141,14 +183,36 @@ export default function ExtractorFlow({ fileId, onError, showResultsInWorkspace 
             </button>
             <button type="button" className="btn-secondary" onClick={loadPages}>Refresh pages</button>
           </div>
+          {loadingExtract && (
+            <div className="extractor-progress">
+              <div className="extractor-progress-bar">
+                <div
+                  className="extractor-progress-fill"
+                  style={{ width: `${Math.min(100, Math.max(0, extractProgress))}%` }}
+                />
+              </div>
+              <div className="extractor-progress-text">
+                <span className="extractor-progress-label">Working on your tables…</span>
+                <span className="extractor-progress-tip">
+                  {extractTips[extractTipIndex]}
+                </span>
+              </div>
+            </div>
+          )}
         </>
       )}
       {extracted && extracted.length > 0 && showResultsInWorkspace && (
-        <div className="structured-preview-card structured-preview-card-static">
+        <button
+          type="button"
+          className="structured-preview-card structured-preview-card-static"
+          onClick={handleOpenInWorkspace}
+        >
           <span className="structured-preview-title">Extracted tables</span>
-          <span className="structured-preview-meta">{extracted.length} table{extracted.length !== 1 ? 's' : ''} — open in workspace panel →</span>
+          <span className="structured-preview-meta">
+            {extracted.length} table{extracted.length !== 1 ? 's' : ''} — open in workspace panel →
+          </span>
           <span className="structured-preview-action">View in workspace →</span>
-        </div>
+        </button>
       )}
       {extracted && extracted.length > 0 && !showResultsInWorkspace && (
         <ExtractorTables extractedTables={extracted} fileId={fileId} />

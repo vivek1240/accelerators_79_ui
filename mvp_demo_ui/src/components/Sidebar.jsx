@@ -37,7 +37,7 @@ export default function Sidebar({
 
       <div className="sidebar-section sidebar-upload-section">
         <div className="sidebar-label">PDF (Extract & Advanced chatbot)</div>
-        <label className="sidebar-upload-area">
+        <label className={`sidebar-upload-area ${uploading ? 'sidebar-upload-area-uploading' : ''}`}>
           <input
             type="file"
             accept=".pdf"
@@ -51,8 +51,14 @@ export default function Sidebar({
             aria-label="Upload PDF"
           />
           <span className="sidebar-upload-label">
-            {uploading ? 'Uploading…' : filename ? filename : 'Upload PDF'}
+            {uploading ? 'Uploading PDF…' : filename ? filename : 'Upload PDF'}
           </span>
+          {uploading && (
+            <span className="sidebar-upload-helper">
+              <span className="sidebar-upload-dots" aria-hidden="true" />
+              Preparing pages and tables so you can extract and chat with your document.
+            </span>
+          )}
         </label>
       </div>
 

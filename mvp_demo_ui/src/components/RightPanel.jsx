@@ -75,9 +75,16 @@ function RightPanel({
                     {filename || 'Uploaded file'}
                   </span>
                   {chatbotProcessing && (
-                    <div className="right-panel-status right-panel-status-waiting">
-                      <span className="right-panel-status-dot" />
-                      <span>Ingesting…</span>
+                    <div className="right-panel-ingest">
+                      <div className="right-panel-ingest-bar">
+                        <div className="right-panel-ingest-fill" />
+                      </div>
+                      <div className="right-panel-ingest-text">
+                        <span className="right-panel-ingest-label">Preparing your document…</span>
+                        <span className="right-panel-ingest-tip">
+                          We are indexing pages, tables, and metadata so queries stay accurate.
+                        </span>
+                      </div>
                     </div>
                   )}
                   {chatbotReady && !chatbotProcessing && (

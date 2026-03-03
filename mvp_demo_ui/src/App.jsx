@@ -103,10 +103,32 @@ export default function App() {
   }, [workspacePanelWidth]);
 
   const addWorkspaceItem = useCallback((item) => {
-    const id = item.id ?? genId();
-    setWorkspaceItems((prev) => [...prev, { ...item, id }]);
-    setActiveWorkspaceId(id);
-    return id;
+    let resolvedId = item.id ?? null;
+    setWorkspaceItems((prev) => {
+      // For extractor results, reuse a single tab per file so "View in workspace"
+      // does not create duplicates.
+      if (item.type === 'extractor' && item.fileId) {
+        const existing = prev.find(
+          (w) => w.type === 'extractor' && w.fileId === item.fileId
+        );
+        if (existing) {
+          resolvedId = existing.id;
+          const updated = prev.map((w) =>
+            w.id === existing.id ? { ...w, ...item, id: existing.id } : w
+          );
+          return updated;
+        }
+      }
+
+      if (!resolvedId) {
+        resolvedId = genId();
+      }
+      return [...prev, { ...item, id: resolvedId }];
+    });
+    if (resolvedId) {
+      setActiveWorkspaceId(resolvedId);
+    }
+    return resolvedId;
   }, []);
 
   const removeWorkspaceItem = useCallback((id) => {
@@ -180,6 +202,8 @@ export default function App() {
         chatbotReady: false,
         chatbotProcessing: false,
       });
+      setWorkspaceItems([]);
+      setActiveWorkspaceId(null);
       try {
         const res = await api.upload(file);
         if (!res?.success || !res?.data?.file_id) {
@@ -200,7 +224,18 @@ export default function App() {
             ? 'PDF uploaded. Advanced chatbot will be ready when ingestion finishes.'
             : 'PDF uploaded. Ready for Extract and Advanced chatbot.'
         );
-        if (res.data.chatbot_status === 'ingesting') pollStatus(fid);
+        if (res.data.chatbot_status === 'ingesting') {
+          pollStatus(fid);
+        } else {
+          const ingestMsg = {
+            id: Date.now() + 2,
+            role: 'system',
+            text: `Document "${fname}" is ready. You can now extract tables or use the Advanced chatbot.`,
+          };
+          setEdgarMessages((prev) => [...prev, ingestMsg]);
+          setExtractMessages((prev) => [...prev, ingestMsg]);
+          setRagMessages((prev) => [...prev, ingestMsg]);
+        }
       } catch (e) {
         showToast(getError(e, 'Upload failed'), true);
       } finally {
