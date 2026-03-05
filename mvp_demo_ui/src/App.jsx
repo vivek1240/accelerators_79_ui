@@ -11,10 +11,13 @@ import RightPanel from './components/RightPanel';
 import ChatLoader from './components/ChatLoader';
 import CommandInput from './components/CommandInput';
 import { UserBubble, AssistantBubble, SystemBubble } from './components/MessageBubble';
+// Advanced analysis UI is currently disabled for performance.
+// import AdvancedAnalysis from './components/AdvancedAnalysis';
 
 const TAB_LABELS = {
   edgar: 'EDGAR',
   extract: 'Extract',
+  analysis: 'Analysis',
   rag: 'Advanced chatbot',
   admin: 'Admin',
 };
@@ -56,6 +59,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [toast, setToast] = useState(null);
+  const [allExtractedTables, setAllExtractedTables] = useState([]);
 
   const { fileId, filename, chatbotReady, chatbotProcessing } = sharedPdf;
 
@@ -204,6 +208,7 @@ export default function App() {
       });
       setWorkspaceItems([]);
       setActiveWorkspaceId(null);
+      setAllExtractedTables([]);
       try {
         const res = await api.upload(file);
         if (!res?.success || !res?.data?.file_id) {
@@ -466,6 +471,7 @@ export default function App() {
                         onError={(msg) => showToast(msg, true)}
                         showResultsInWorkspace
                         onExtractionComplete={(extractedTables) => {
+                          setAllExtractedTables((prev) => [...prev, ...extractedTables]);
                           const id = addWorkspaceItem({
                             type: 'extractor',
                             title: 'Extracted tables',
@@ -480,6 +486,21 @@ export default function App() {
                 </>
               )}
             </>
+          )}
+
+          {activeTab === 'analysis' && (
+            <div className="aa-empty">
+              <div className="aa-empty-visual">
+                <div className="aa-empty-circle" />
+                <div className="aa-empty-circle aa-empty-circle-2" />
+                <div className="aa-empty-icon-wrap">🚧</div>
+              </div>
+              <h3 className="aa-empty-title">Analysis temporarily disabled</h3>
+              <p className="aa-empty-text">
+                The advanced analysis and visualization flow is turned off for now to keep the app fast.
+                You can re‑enable it later by wiring the <code>AdvancedAnalysis</code> component back in.
+              </p>
+            </div>
           )}
 
           {activeTab === 'rag' && (
@@ -539,6 +560,9 @@ export default function App() {
             )}
             {activeTab === 'extract' && (
               <p className="chatbar-hint">Use the flow above to select pages and extract tables.</p>
+            )}
+            {activeTab === 'analysis' && (
+              <p className="chatbar-hint">Extract tables first, then view insights and visualizations here.</p>
             )}
           </div>
         </footer>

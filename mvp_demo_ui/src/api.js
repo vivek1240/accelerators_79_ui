@@ -160,6 +160,13 @@ export async function extract(fileId, pageIndices) {
   return data;
 }
 
+// Advanced analysis endpoint is currently disabled from the UI.
+// Keep this helper around so it can be re-enabled later without re-writing it.
+// export async function analyze(tables, filename) {
+//   const { data } = await api.post('/analyze', { tables, filename });
+//   return data;
+// }
+
 export async function query(fileId, question) {
   const { data } = await api.post('/query', {
     file_id: fileId,

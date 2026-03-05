@@ -4,6 +4,7 @@
 const TABS = [
   { id: 'edgar', label: 'EDGAR', description: 'Get data for publicly listed companies' },
   { id: 'extract', label: 'Extract', description: 'Extract tables from PDF pages' },
+  { id: 'analysis', label: 'Analysis', description: 'Insights and visualizations for extracted tables' },
   { id: 'rag', label: 'Advanced chatbot', description: 'Ask questions about your document' },
 ];
 

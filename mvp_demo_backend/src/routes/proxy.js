@@ -137,6 +137,21 @@ router.post(
   }
 );
 
+/** POST /analyze — LLM narration of pre-computed table insights */
+router.post(
+  '/analyze',
+  requireAllowedForProxy,
+  express.json(),
+  async (req, res) => {
+    try {
+      const { data } = await fastapi.post('/analyze', req.body);
+      res.json(data);
+    } catch (err) {
+      res.status(err.response?.status || 502).json(err.response?.data ?? {});
+    }
+  }
+);
+
 /** POST /query - FastAPI requires file_id, user_id, question; inject user_id from auth */
 router.post(
   '/query',
