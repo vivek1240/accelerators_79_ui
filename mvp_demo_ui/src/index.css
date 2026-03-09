@@ -406,6 +406,107 @@ button:disabled {
   margin-top: 4px;
 }
 
+/* ----- Extractor card (side-by-side table + page preview) ----- */
+.extract-card {
+  background: var(--surface-elevated);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  margin-bottom: 20px;
+  max-width: 100%;
+}
+.extract-card-header {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface-elevated);
+}
+.extract-card-page {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text);
+  flex-shrink: 0;
+}
+.extract-card-title {
+  font-size: 13px;
+  color: var(--text-muted);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.extract-card-status-failed {
+  font-size: 12px;
+  color: #ef4444;
+  font-weight: 600;
+}
+.extract-card-toggle {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background .15s, color .15s;
+}
+.extract-card-toggle:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+.extract-card-body {
+  display: flex;
+  flex-direction: column;
+}
+.extract-card-body-split {
+  flex-direction: row;
+}
+.extract-card-table-side {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+.extract-card-body-split .extract-card-table-side {
+  flex: 3;
+}
+.extract-card-preview-side {
+  flex: 2;
+  min-width: 200px;
+  max-width: 40%;
+  border-left: 1px solid var(--border);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12px;
+  background: var(--bg-subtle);
+  overflow-y: auto;
+  max-height: 600px;
+}
+.extract-card-preview-img {
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  object-fit: contain;
+}
+@media (max-width: 900px) {
+  .extract-card-body-split {
+    flex-direction: column;
+  }
+  .extract-card-preview-side {
+    max-width: 100%;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    max-height: 400px;
+  }
+}
+
 /* ----- App layout: sidebar | main | right panel ----- */
 .app-layout {
   min-height: 100vh;

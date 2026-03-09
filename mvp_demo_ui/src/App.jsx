@@ -5,6 +5,8 @@ import Auth from './components/Auth';
 import AdminDashboard from './components/AdminDashboard';
 import EdgarTables from './components/EdgarTables';
 import ExtractorFlow from './components/ExtractorFlow';
+// --- NEW CHANGE (inline preview): import ExtractorTables (uncomment to re-enable inline preview) ---
+// import ExtractorTables from './components/ExtractorTables';
 import QueryAnswer from './components/QueryAnswer';
 import Sidebar from './components/Sidebar';
 import RightPanel from './components/RightPanel';
@@ -60,6 +62,9 @@ export default function App() {
   const [uploading, setUploading] = useState(false);
   const [toast, setToast] = useState(null);
   const [allExtractedTables, setAllExtractedTables] = useState([]);
+  // --- NEW CHANGE (inline preview): uncomment next 2 lines to re-enable inline preview ---
+  // const [extractedPageIndices, setExtractedPageIndices] = useState(new Set());
+  // const [pagePreviewUrls, setPagePreviewUrls] = useState({});
 
   const { fileId, filename, chatbotReady, chatbotProcessing } = sharedPdf;
 
@@ -209,6 +214,9 @@ export default function App() {
       setWorkspaceItems([]);
       setActiveWorkspaceId(null);
       setAllExtractedTables([]);
+      // --- NEW CHANGE (inline preview): uncomment next 2 lines to re-enable inline preview ---
+      // setExtractedPageIndices(new Set());
+      // setPagePreviewUrls({});
       try {
         const res = await api.upload(file);
         if (!res?.success || !res?.data?.file_id) {
@@ -436,6 +444,7 @@ export default function App() {
             </>
           )}
 
+          {/* --- NEW CHANGE START (inline preview): uncomment this block and comment out ORIGINAL below to re-enable ---
           {activeTab === 'extract' && (
             <>
               {!fileId && (
@@ -448,7 +457,62 @@ export default function App() {
               )}
               {fileId && (
                 <>
-                  {currentMessages.length === 0 && (
+                  {allExtractedTables.length === 0 && (
+                    <div className="msg-row">
+                      <SystemBubble text={`Document "${filename || 'PDF'}" ready. Select pages to extract below.`} />
+                    </div>
+                  )}
+
+                  {allExtractedTables.length > 0 && (
+                    <div className="msg-row" style={{ maxWidth: '100%' }}>
+                      <div style={{ width: '100%' }}>
+                        <ExtractorTables
+                          extractedTables={allExtractedTables}
+                          fileId={fileId}
+                          pagePreviewUrls={pagePreviewUrls}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="msg-row">
+                    <div className="output-card">
+                      <ExtractorFlow
+                        fileId={fileId}
+                        onError={(msg) => showToast(msg, true)}
+                        alreadyExtractedIndices={extractedPageIndices}
+                        onPreviewUrlsLoaded={(urls) => setPagePreviewUrls((prev) => ({ ...prev, ...urls }))}
+                        onExtractionComplete={(extractedTables) => {
+                          setAllExtractedTables((prev) => [...prev, ...extractedTables]);
+                          const newIndices = new Set(extractedPageIndices);
+                          extractedTables.forEach((t) => {
+                            if (t.page_index != null) newIndices.add(t.page_index);
+                          });
+                          setExtractedPageIndices(newIndices);
+                        }}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+          --- NEW CHANGE END (inline preview) --- */}
+
+          {/* --- ORIGINAL: workspace behaviour (with table caching across tab switches) --- */}
+          {activeTab === 'extract' && (
+            <>
+              {!fileId && (
+                <div className="welcome-card">
+                  <h2 className="welcome-title">Extract</h2>
+                  <p className="welcome-text">
+                    Extract tables from PDF pages. Upload a PDF in the left sidebar, then select pages and extract tables.
+                  </p>
+                </div>
+              )}
+              {fileId && (
+                <>
+                  {currentMessages.length === 0 && allExtractedTables.length === 0 && (
                     <div className="msg-row">
                       <SystemBubble text={`Document "${filename || 'PDF'}" ready. Select pages to extract below.`} />
                     </div>
@@ -470,12 +534,13 @@ export default function App() {
                         fileId={fileId}
                         onError={(msg) => showToast(msg, true)}
                         showResultsInWorkspace
+                        cachedTables={allExtractedTables}
                         onExtractionComplete={(extractedTables) => {
                           setAllExtractedTables((prev) => [...prev, ...extractedTables]);
                           const id = addWorkspaceItem({
                             type: 'extractor',
                             title: 'Extracted tables',
-                            extractedTables,
+                            extractedTables: [...allExtractedTables, ...extractedTables],
                             fileId,
                           });
                           setActiveWorkspaceId(id);
@@ -487,6 +552,7 @@ export default function App() {
               )}
             </>
           )}
+          {/* --- END ORIGINAL --- */}
 
           {activeTab === 'analysis' && (
             <div className="aa-empty">
