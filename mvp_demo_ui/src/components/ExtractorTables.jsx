@@ -132,6 +132,11 @@ function OneTable({ tbl }) {
     return (
       <div className="extract-table-wrap">
         <div className="extract-table-header">Page {tbl.page_number >= 1 ? tbl.page_number : '?'} — Extraction failed</div>
+        {tbl.error && (
+          <div style={{ padding: '12px 18px', fontSize: 13, color: 'var(--text-muted)', borderTop: '1px solid var(--border-subtle)' }}>
+            <strong>Reason:</strong> {tbl.error}
+          </div>
+        )}
       </div>
     );
   }
