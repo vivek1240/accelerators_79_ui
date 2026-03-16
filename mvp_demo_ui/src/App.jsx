@@ -5,8 +5,7 @@ import Auth from './components/Auth';
 import AdminDashboard from './components/AdminDashboard';
 import EdgarTables from './components/EdgarTables';
 import ExtractorFlow from './components/ExtractorFlow';
-// --- NEW CHANGE (inline preview): import ExtractorTables (uncomment to re-enable inline preview) ---
-// import ExtractorTables from './components/ExtractorTables';
+import ExtractorTables from './components/ExtractorTables';
 import QueryAnswer from './components/QueryAnswer';
 import Sidebar from './components/Sidebar';
 import RightPanel from './components/RightPanel';
@@ -62,9 +61,8 @@ export default function App() {
   const [uploading, setUploading] = useState(false);
   const [toast, setToast] = useState(null);
   const [allExtractedTables, setAllExtractedTables] = useState([]);
-  // --- NEW CHANGE (inline preview): uncomment next 2 lines to re-enable inline preview ---
-  // const [extractedPageIndices, setExtractedPageIndices] = useState(new Set());
-  // const [pagePreviewUrls, setPagePreviewUrls] = useState({});
+  const [extractedPageIndices, setExtractedPageIndices] = useState(() => new Set());
+  const [pagePreviewUrls, setPagePreviewUrls] = useState({});
 
   const { fileId, filename, chatbotReady, chatbotProcessing } = sharedPdf;
 
@@ -444,7 +442,6 @@ export default function App() {
             </>
           )}
 
-          {/* --- NEW CHANGE START (inline preview): uncomment this block and comment out ORIGINAL below to re-enable ---
           {activeTab === 'extract' && (
             <>
               {!fileId && (
@@ -470,6 +467,7 @@ export default function App() {
                           extractedTables={allExtractedTables}
                           fileId={fileId}
                           pagePreviewUrls={pagePreviewUrls}
+                          onExportError={(msg) => showToast(msg, true)}
                         />
                       </div>
                     </div>
@@ -484,11 +482,13 @@ export default function App() {
                         onPreviewUrlsLoaded={(urls) => setPagePreviewUrls((prev) => ({ ...prev, ...urls }))}
                         onExtractionComplete={(extractedTables) => {
                           setAllExtractedTables((prev) => [...prev, ...extractedTables]);
-                          const newIndices = new Set(extractedPageIndices);
-                          extractedTables.forEach((t) => {
-                            if (t.page_index != null) newIndices.add(t.page_index);
+                          setExtractedPageIndices((prev) => {
+                            const next = new Set(prev);
+                            extractedTables.forEach((t) => {
+                              if (t.page_index != null) next.add(t.page_index);
+                            });
+                            return next;
                           });
-                          setExtractedPageIndices(newIndices);
                         }}
                       />
                     </div>
@@ -497,62 +497,6 @@ export default function App() {
               )}
             </>
           )}
-          --- NEW CHANGE END (inline preview) --- */}
-
-          {/* --- ORIGINAL: workspace behaviour (with table caching across tab switches) --- */}
-          {activeTab === 'extract' && (
-            <>
-              {!fileId && (
-                <div className="welcome-card">
-                  <h2 className="welcome-title">Extract</h2>
-                  <p className="welcome-text">
-                    Extract tables from PDF pages. Upload a PDF in the left sidebar, then select pages and extract tables.
-                  </p>
-                </div>
-              )}
-              {fileId && (
-                <>
-                  {currentMessages.length === 0 && allExtractedTables.length === 0 && (
-                    <div className="msg-row">
-                      <SystemBubble text={`Document "${filename || 'PDF'}" ready. Select pages to extract below.`} />
-                    </div>
-                  )}
-                  {currentMessages.map((msg) => (
-                    <div key={msg.id} className="msg-row msg-row-animate">
-                      <MessageBlock
-                        msg={msg}
-                        onError={showToast}
-                        workspaceActiveId={activeWorkspaceId}
-                        onOpenWorkspace={setActiveWorkspaceId}
-                        addWorkspaceItem={addWorkspaceItem}
-                      />
-                    </div>
-                  ))}
-                  <div className="msg-row">
-                    <div className="output-card">
-                      <ExtractorFlow
-                        fileId={fileId}
-                        onError={(msg) => showToast(msg, true)}
-                        showResultsInWorkspace
-                        cachedTables={allExtractedTables}
-                        onExtractionComplete={(extractedTables) => {
-                          setAllExtractedTables((prev) => [...prev, ...extractedTables]);
-                          const id = addWorkspaceItem({
-                            type: 'extractor',
-                            title: 'Extracted tables',
-                            extractedTables: [...allExtractedTables, ...extractedTables],
-                            fileId,
-                          });
-                          setActiveWorkspaceId(id);
-                        }}
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
-            </>
-          )}
-          {/* --- END ORIGINAL --- */}
 
           {activeTab === 'analysis' && (
             <div className="aa-empty">

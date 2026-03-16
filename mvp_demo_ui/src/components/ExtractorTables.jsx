@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { exportExtractToExcel } from '../utils/excel';
 
 /**
@@ -63,129 +64,50 @@ function normalizeExtractData(data) {
   return { rows, periodLabels };
 }
 
-/* --- NEW CHANGE START (side-by-side preview OneTable) ---
- * To re-enable: uncomment this block and comment out the ORIGINAL OneTable below.
- * Also uncomment `import { useState } from 'react';` at the top.
- *
- * import { useState } from 'react';
- *
- * function OneTable({ tbl, previewUrl }) {
- *   const [showPreview, setShowPreview] = useState(true);
- *   const data = tbl.data;
- *   const meta = tbl.table_metadata || data?.table_metadata;
- *   const tableType = meta?.table_type || 'tabular';
- *   const pageNum = tbl.page_number >= 1 ? tbl.page_number : '?';
- *
- *   if (!data) {
- *     return (<div className="extract-card"><div className="extract-card-header"><span className="extract-card-page">Page {pageNum}</span><span className="extract-card-status extract-card-status-failed">Extraction failed</span></div></div>);
- *   }
- *
- *   const { rows, periodLabels } = normalizeExtractData(data);
- *   const hasPreview = Boolean(previewUrl);
- *
- *   const tableContent = (tableType === 'text_only' || rows.length === 0) ? (
- *     <div className="extract-table-wrap"><div className="extract-text-only">{rows.map((r, i) => (<div key={i} className="extract-text-row">{r.label}{r.values && Object.keys(r.values).length > 0 && (<span className="extract-text-values">{Object.entries(r.values).map(([k, v]) => `${k}: ${v}`).join(' · ')}</span>)}</div>))}</div></div>
- *   ) : (
- *     <div className="extract-table-wrap"><div className="extract-table-scroll"><table className="extract-table"><thead><tr><th className="extract-th">Line Item</th>{periodLabels.map((p) => (<th key={p} className="extract-th">{p}</th>))}</tr></thead><tbody>{rows.map((row, i) => (<tr key={i} className={row.is_section ? 'extract-section-row' : ''}><td className="extract-td">{row.label}</td>{periodLabels.map((key) => { const val = row.values?.[key]; const display = val != null && val !== '' ? String(val) : '—'; return (<td key={key} className="extract-td extract-td-value">{display}</td>); })}</tr>))}</tbody></table></div></div>
- *   );
- *
- *   const metaBlock = (meta?.summary || (meta?.key_insights && meta.key_insights.length > 0)) ? (
- *     <div className="extract-table-meta-block">{meta.summary && <p className="extract-table-summary">{meta.summary}</p>}{meta.key_insights && meta.key_insights.length > 0 && (<ul className="extract-table-key-insights">{meta.key_insights.map((insight, i) => (<li key={i}>{insight}</li>))}</ul>)}</div>
- *   ) : null;
- *
- *   return (
- *     <div className="extract-card">
- *       <div className="extract-card-header">
- *         <span className="extract-card-page">Page {pageNum}</span>
- *         {meta?.table_title && <span className="extract-card-title">{meta.table_title}</span>}
- *         {hasPreview && (<button type="button" className="extract-card-toggle" onClick={() => setShowPreview((v) => !v)} title={showPreview ? 'Hide page preview' : 'Show page preview'}>{showPreview ? 'Hide preview' : 'Show preview'}</button>)}
- *       </div>
- *       <div className={`extract-card-body ${hasPreview && showPreview ? 'extract-card-body-split' : ''}`}>
- *         <div className="extract-card-table-side">{tableContent}{metaBlock}</div>
- *         {hasPreview && showPreview && (<div className="extract-card-preview-side"><img src={previewUrl} alt={`Page ${pageNum}`} className="extract-card-preview-img" /></div>)}
- *       </div>
- *     </div>
- *   );
- * }
- *
- * export default function ExtractorTables({ extractedTables, fileId, onExport, pagePreviewUrls = {} }) {
- *   const handleExport = () => { if (onExport) onExport(); else exportExtractToExcel(extractedTables, fileId || 'extract'); };
- *   return (
- *     <div className="extract-tables-container">
- *       <div className="extract-tables-toolbar">
- *         <span className="extract-tables-title">Extracted Tables ({extractedTables.length})</span>
- *         <button type="button" className="btn-primary" onClick={handleExport}>Export to Excel</button>
- *       </div>
- *       {extractedTables.map((tbl, idx) => { const previewUrl = pagePreviewUrls[tbl.page_index] || null; return <OneTable key={idx} tbl={tbl} previewUrl={previewUrl} />; })}
- *     </div>
- *   );
- * }
- * --- NEW CHANGE END (side-by-side preview OneTable) --- */
+const PDF_ZOOM_STEP = 0.25;
+const PDF_ZOOM_MIN = 0.5;
+const PDF_ZOOM_MAX = 2.5;
 
-// --- ORIGINAL OneTable + ExtractorTables ---
-function OneTable({ tbl }) {
+// --- Side-by-side table + PDF page preview ---
+function OneTableWithPreview({ tbl, previewUrl }) {
+  const [showPreview, setShowPreview] = useState(true);
+  const [pdfZoom, setPdfZoom] = useState(1);
   const data = tbl.data;
   const meta = tbl.table_metadata || data?.table_metadata;
   const tableType = meta?.table_type || 'tabular';
+  const pageNum = tbl.page_number >= 1 ? tbl.page_number : (tbl.page_index != null ? tbl.page_index + 1 : '?');
 
   if (!data) {
     return (
-      <div className="extract-table-wrap">
-        <div className="extract-table-header">Page {tbl.page_number >= 1 ? tbl.page_number : '?'} — Extraction failed</div>
-        {tbl.error && (
-          <div style={{ padding: '12px 18px', fontSize: 13, color: 'var(--text-muted)', borderTop: '1px solid var(--border-subtle)' }}>
-            <strong>Reason:</strong> {tbl.error}
-          </div>
-        )}
+      <div className="extract-card">
+        <div className="extract-card-header">
+          <span className="extract-card-page">Page {pageNum}</span>
+          <span className="extract-card-status extract-card-status-failed">Extraction failed</span>
+        </div>
       </div>
     );
   }
 
   const { rows, periodLabels } = normalizeExtractData(data);
+  const hasPreview = Boolean(previewUrl);
 
-  if (tableType === 'text_only' || rows.length === 0) {
-    return (
-      <div className="extract-table-wrap">
-        <div className="extract-table-header">
-          <span>Page {tbl.page_number >= 1 ? tbl.page_number : '?'}</span>
-          {meta?.table_title && <span className="extract-table-meta">{meta.table_title}</span>}
-        </div>
-        <div className="extract-text-only">
-          {rows.map((r, i) => (
-            <div key={i} className="extract-text-row">
-              {r.label}
-              {r.values && Object.keys(r.values).length > 0 && (
-                <span className="extract-text-values">
-                  {Object.entries(r.values).map(([k, v]) => `${k}: ${v}`).join(' · ')}
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-        {(meta?.summary || (meta?.key_insights && meta.key_insights.length > 0)) && (
-          <div className="extract-table-meta-block">
-            {meta.summary && (
-              <p className="extract-table-summary">{meta.summary}</p>
-            )}
-            {meta.key_insights && meta.key_insights.length > 0 && (
-              <ul className="extract-table-key-insights">
-                {meta.key_insights.map((insight, i) => (
-                  <li key={i}>{insight}</li>
-                ))}
-              </ul>
+  const tableContent = (tableType === 'text_only' || rows.length === 0) ? (
+    <div className="extract-table-wrap">
+      <div className="extract-text-only">
+        {rows.map((r, i) => (
+          <div key={i} className="extract-text-row">
+            {r.label}
+            {r.values && Object.keys(r.values).length > 0 && (
+              <span className="extract-text-values">
+                {Object.entries(r.values).map(([k, v]) => `${k}: ${v}`).join(' · ')}
+              </span>
             )}
           </div>
-        )}
+        ))}
       </div>
-    );
-  }
-
-  return (
+    </div>
+  ) : (
     <div className="extract-table-wrap">
-      <div className="extract-table-header">
-        <span>Page {tbl.page_number >= 1 ? tbl.page_number : '?'}</span>
-        {meta?.table_title && <span className="extract-table-meta">{meta.table_title}</span>}
-      </div>
       <div className="extract-table-scroll">
         <table className="extract-table">
           <thead>
@@ -204,9 +126,7 @@ function OneTable({ tbl }) {
                   const val = row.values?.[key];
                   const display = val != null && val !== '' ? String(val) : '—';
                   return (
-                    <td key={key} className="extract-td extract-td-value">
-                      {display}
-                    </td>
+                    <td key={key} className="extract-td extract-td-value">{display}</td>
                   );
                 })}
               </tr>
@@ -214,42 +134,117 @@ function OneTable({ tbl }) {
           </tbody>
         </table>
       </div>
-      {(meta?.summary || (meta?.key_insights && meta.key_insights.length > 0)) && (
-        <div className="extract-table-meta-block">
-          {meta.summary && (
-            <p className="extract-table-summary">{meta.summary}</p>
-          )}
-          {meta.key_insights && meta.key_insights.length > 0 && (
-            <ul className="extract-table-key-insights">
-              {meta.key_insights.map((insight, i) => (
-                <li key={i}>{insight}</li>
-              ))}
-            </ul>
-          )}
-        </div>
+    </div>
+  );
+
+  const metaBlock = (meta?.summary || (meta?.key_insights && meta.key_insights.length > 0)) ? (
+    <div className="extract-table-meta-block">
+      {meta.summary && <p className="extract-table-summary">{meta.summary}</p>}
+      {meta.key_insights && meta.key_insights.length > 0 && (
+        <ul className="extract-table-key-insights">
+          {meta.key_insights.map((insight, i) => (
+            <li key={i}>{insight}</li>
+          ))}
+        </ul>
       )}
+    </div>
+  ) : null;
+
+  return (
+    <div className="extract-card">
+      <div className="extract-card-header">
+        <span className="extract-card-page">Page {pageNum}</span>
+        {meta?.table_title && <span className="extract-card-title">{meta.table_title}</span>}
+        {hasPreview && (
+          <button
+            type="button"
+            className="extract-card-toggle"
+            onClick={() => setShowPreview((v) => !v)}
+            title={showPreview ? 'Hide page preview' : 'Show page preview'}
+          >
+            {showPreview ? 'Hide preview' : 'Show preview'}
+          </button>
+        )}
+      </div>
+      <div className={`extract-card-body ${hasPreview && showPreview ? 'extract-card-body-split' : ''}`}>
+        <div className="extract-card-table-side">{tableContent}{metaBlock}</div>
+        {hasPreview && showPreview && (
+          <div className="extract-card-preview-side">
+            <div className="extract-card-preview-zoom-toolbar">
+              <span className="extract-card-preview-zoom-label">PDF zoom</span>
+              <button
+                type="button"
+                className="extract-card-preview-zoom-btn"
+                onClick={() => setPdfZoom((z) => Math.max(PDF_ZOOM_MIN, z - PDF_ZOOM_STEP))}
+                title="Zoom out"
+                aria-label="Zoom out PDF"
+              >
+                −
+              </button>
+              <span className="extract-card-preview-zoom-value">{Math.round(pdfZoom * 100)}%</span>
+              <button
+                type="button"
+                className="extract-card-preview-zoom-btn"
+                onClick={() => setPdfZoom((z) => Math.min(PDF_ZOOM_MAX, z + PDF_ZOOM_STEP))}
+                title="Zoom in"
+                aria-label="Zoom in PDF"
+              >
+                +
+              </button>
+              <button
+                type="button"
+                className="extract-card-preview-zoom-btn extract-card-preview-zoom-reset"
+                onClick={() => setPdfZoom(1)}
+                title="Reset to 100%"
+                aria-label="Reset PDF zoom"
+              >
+                Reset
+              </button>
+            </div>
+            <div className="extract-card-preview-scroll">
+              <img
+                src={previewUrl}
+                alt={`Page ${pageNum}`}
+                className="extract-card-preview-img"
+                style={{ width: `${pdfZoom * 100}%`, height: 'auto' }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-export default function ExtractorTables({ extractedTables, fileId, onExport }) {
-  const handleExport = () => {
+export default function ExtractorTables({ extractedTables, fileId, onExport, onExportError, pagePreviewUrls = {} }) {
+  const handleExport = async () => {
     if (onExport) onExport();
-    else exportExtractToExcel(extractedTables, fileId || 'extract');
+    try {
+      const didExport = await exportExtractToExcel(extractedTables, fileId || 'extract');
+      if (!didExport) {
+        const msg = 'No exportable table data (rows/periods missing).';
+        if (onExportError) onExportError(msg);
+        else alert(msg);
+      }
+    } catch (err) {
+      const msg = err?.message || 'Export to Excel failed.';
+      if (onExportError) onExportError(msg);
+      else alert(msg);
+    }
   };
 
   return (
     <div className="extract-tables-container">
       <div className="extract-tables-toolbar">
-        <span className="extract-tables-title">Extracted Tables</span>
+        <span className="extract-tables-title">Extracted Tables ({extractedTables.length})</span>
         <button type="button" className="btn-primary" onClick={handleExport}>
           Export to Excel
         </button>
       </div>
-      {extractedTables.map((tbl, idx) => (
-        <OneTable key={idx} tbl={tbl} />
-      ))}
+      {extractedTables.map((tbl, idx) => {
+        const previewUrl = pagePreviewUrls[tbl.page_index] ?? pagePreviewUrls[tbl.pageIndex] ?? null;
+        return <OneTableWithPreview key={idx} tbl={tbl} previewUrl={previewUrl} />;
+      })}
     </div>
   );
 }
-// --- END ORIGINAL ---

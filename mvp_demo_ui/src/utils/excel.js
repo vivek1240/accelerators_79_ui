@@ -170,13 +170,21 @@ export async function exportEdgarToExcel(merged, ticker = 'EDGAR') {
 }
 
 /**
- * Backend keys row.values by str(period.year). Use same key for export.
+ * Period keys that match row.values: prefer label if present in sample row, else year.
+ * Backend keys row.values by period label (exact header text); fallback to year for compat.
  */
-function getPeriodKeys(periods) {
+function getPeriodKeys(periods, sampleRow) {
   if (!periods || !periods.length) return [];
+  const vals = (sampleRow && typeof sampleRow.values === 'object') ? sampleRow.values : {};
   return periods
     .map((p) => {
-      if (typeof p === 'object' && p != null) return String(p.year ?? p.label ?? '');
+      if (typeof p === 'object' && p != null) {
+        const label = typeof p.label === 'string' ? p.label.trim() : '';
+        const yearStr = p.year != null ? String(p.year) : '';
+        if (label && label in vals) return label;
+        if (yearStr && yearStr in vals) return yearStr;
+        return label || yearStr || '';
+      }
       return String(p);
     })
     .filter(Boolean);
@@ -185,143 +193,131 @@ function getPeriodKeys(periods) {
 /**
  * Extractor payload (payload_doc): data.rows + data.periods, or fallback data.sections[].items[]
  * Excel export: mirrors EDGAR formatting — numeric cells, clean table outline, no inner grid.
+ * @returns {Promise<boolean>} true if download was triggered, false if no exportable data.
+ * One worksheet per page; all tables from the same page are written to that page's tab.
  */
-export async function exportExtractToExcel(extractedTables, fileId = 'extract') {
-  const wb = new ExcelJS.Workbook();
-
-  extractedTables.forEach((tbl, idx) => {
-    const data = tbl.data;
-    if (!data) return;
-
-    let periodKeys = [];
-    let rows = [];
-
-    if (data.rows && data.rows.length) {
-      const periods = data.periods || [];
-      periodKeys = getPeriodKeys(periods);
-      if (periodKeys.length === 0 && data.rows[0]?.values && typeof data.rows[0].values === 'object') {
-        periodKeys = Object.keys(data.rows[0].values);
-      }
-      const firstRowKeys = data.rows[0]?.values && typeof data.rows[0].values === 'object' ? Object.keys(data.rows[0].values) : [];
-      if (firstRowKeys.length > 0 && periodKeys.length > 0) {
-        const hasOverlap = periodKeys.some((pk) => data.rows.some((r) => r.values && pk in (r.values || {})));
-        if (!hasOverlap) {
-          const allKeys = [];
-          data.rows.forEach((r) => {
-            Object.keys(r.values || {}).forEach((k) => { if (!allKeys.includes(k)) allKeys.push(k); });
-          });
-          periodKeys = allKeys;
-        }
-      }
-      rows = data.rows;
-    } else {
-      const sections = data.sections || [];
-      sections.forEach((sec) => {
-        const items = sec.items || [];
-        const keys = getPeriodKeys(sec.periods);
-        if (periodKeys.length === 0 && keys.length) periodKeys = keys;
-        else if (periodKeys.length === 0 && items[0]?.values) periodKeys = Object.keys(items[0].values);
-        items.forEach((item) => {
-          const label = item.item_label || item.label || '';
-          const vals = item.values || item.period_values || {};
-          rows.push({ label, values: vals });
+function parseTableData(data) {
+  if (!data) return null;
+  let periodKeys = [];
+  let rows = [];
+  if (data.rows && data.rows.length) {
+    const periods = data.periods || [];
+    periodKeys = getPeriodKeys(periods, data.rows[0]);
+    if (periodKeys.length === 0 && data.rows[0]?.values && typeof data.rows[0].values === 'object') {
+      periodKeys = Object.keys(data.rows[0].values);
+    }
+    const firstRowKeys = data.rows[0]?.values && typeof data.rows[0].values === 'object' ? Object.keys(data.rows[0].values) : [];
+    if (firstRowKeys.length > 0 && periodKeys.length > 0) {
+      const hasOverlap = periodKeys.some((pk) => data.rows.some((r) => r.values && pk in (r.values || {})));
+      if (!hasOverlap) {
+        const allKeys = [];
+        data.rows.forEach((r) => {
+          Object.keys(r.values || {}).forEach((k) => { if (!allKeys.includes(k)) allKeys.push(k); });
         });
+        periodKeys = allKeys;
+      }
+    }
+    rows = data.rows;
+  } else {
+    const sections = data.sections || [];
+    sections.forEach((sec) => {
+      const items = sec.items || [];
+      const keys = getPeriodKeys(sec.periods || [], items[0]);
+      if (periodKeys.length === 0 && keys.length) periodKeys = keys;
+      else if (periodKeys.length === 0 && items[0]?.values) periodKeys = Object.keys(items[0].values);
+      items.forEach((item) => {
+        const label = item.item_label || item.label || '';
+        const vals = item.values || item.period_values || {};
+        rows.push({ label, values: vals });
       });
+    });
+  }
+  if (!periodKeys.length || !rows.length) return null;
+  return { periodKeys, rows };
+}
+
+const headerFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9D9D9' } };
+const outlineBorder = { style: 'thin', color: { argb: 'FF4B5563' } };
+const innerBorder = { style: 'thin', color: { argb: 'FFFFFFFF' } };
+
+function applyTableBorders(ws, firstRow, lastRow, firstCol, lastCol) {
+  for (let rowIdx = firstRow; rowIdx <= lastRow; rowIdx += 1) {
+    const excelRow = ws.getRow(rowIdx);
+    for (let colIdx = firstCol; colIdx <= lastCol; colIdx += 1) {
+      const cell = excelRow.getCell(colIdx);
+      cell.border = { top: innerBorder, bottom: innerBorder, left: innerBorder, right: innerBorder };
+    }
+  }
+  for (let colIdx = firstCol; colIdx <= lastCol; colIdx += 1) {
+    ws.getRow(firstRow).getCell(colIdx).border = { ...(ws.getRow(firstRow).getCell(colIdx).border || {}), top: outlineBorder };
+    ws.getRow(lastRow).getCell(colIdx).border = { ...(ws.getRow(lastRow).getCell(colIdx).border || {}), bottom: outlineBorder };
+  }
+  for (let rowIdx = firstRow; rowIdx <= lastRow; rowIdx += 1) {
+    ws.getRow(rowIdx).getCell(firstCol).border = { ...(ws.getRow(rowIdx).getCell(firstCol).border || {}), left: outlineBorder };
+    ws.getRow(rowIdx).getCell(lastCol).border = { ...(ws.getRow(rowIdx).getCell(lastCol).border || {}), right: outlineBorder };
+  }
+}
+
+export async function exportExtractToExcel(extractedTables, baseName = 'extract') {
+  const wb = new ExcelJS.Workbook();
+  const tables = (extractedTables || []).filter((t) => t && t.data);
+  const byPage = new Map();
+
+  for (const tbl of tables) {
+    const parsed = parseTableData(tbl.data);
+    if (!parsed) continue;
+    const pageIndex = typeof tbl.page_index === 'number' ? tbl.page_index : (tbl.page_number != null ? tbl.page_number - 1 : 0);
+    if (!byPage.has(pageIndex)) byPage.set(pageIndex, []);
+    byPage.get(pageIndex).push(parsed);
+  }
+
+  const sortedPageIndices = [...byPage.keys()].sort((a, b) => a - b);
+
+  for (const pageIndex of sortedPageIndices) {
+    const pageTables = byPage.get(pageIndex);
+    if (!pageTables.length) continue;
+
+    const sheetName = `Page ${pageIndex + 1}`.substring(0, 31);
+    const ws = wb.addWorksheet(sheetName, { views: [{ state: 'frozen', ySplit: 1 }] });
+    let currentRow = 1;
+    let maxCols = 1;
+
+    for (let t = 0; t < pageTables.length; t++) {
+      const { periodKeys, rows } = pageTables[t];
+      if (t > 0) currentRow += 2;
+      const tableStartRow = currentRow;
+      const headerRow = ws.addRow(['Line Item', ...periodKeys]);
+      headerRow.font = { bold: true };
+      headerRow.fill = headerFill;
+      headerRow.alignment = { vertical: 'middle', wrapText: true };
+      currentRow += 1;
+      rows.forEach((row) => {
+        const label = row.label ?? '';
+        const vals = row.values || {};
+        const values = periodKeys.map((k) => normalizeNumericValue(vals[k]));
+        const excelRow = ws.addRow([label, ...values]);
+        excelRow.getCell(1).alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
+        periodKeys.forEach((_, idxKey) => {
+          const cell = excelRow.getCell(idxKey + 2);
+          cell.alignment = { horizontal: 'right', vertical: 'middle' };
+          const v = values[idxKey];
+          if (typeof v === 'number') cell.numFmt = '#,##0';
+        });
+        currentRow += 1;
+      });
+      const tableEndRow = currentRow - 1;
+      const numCols = periodKeys.length + 1;
+      if (numCols > maxCols) maxCols = numCols;
+      applyTableBorders(ws, tableStartRow, tableEndRow, 1, numCols);
     }
 
-    if (!periodKeys.length || !rows.length) return;
-
-    const ws = wb.addWorksheet(`Page ${tbl.page_number || idx + 1}`.substring(0, 31), {
-      views: [{ state: 'frozen', ySplit: 1 }],
-    });
-
-    const headerFill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FFD9D9D9' },
-    };
-
-    const headerRow = ws.addRow(['Line Item', ...periodKeys]);
-    headerRow.font = { bold: true };
-    headerRow.fill = headerFill;
-    headerRow.alignment = { vertical: 'middle', wrapText: true };
-
-    rows.forEach((row) => {
-      const label = row.label ?? '';
-      const vals = row.values || {};
-      const values = periodKeys.map((k) => normalizeNumericValue(vals[k]));
-
-      const excelRow = ws.addRow([label, ...values]);
-
-      // Line item label: wrap text to keep numeric columns compact
-      excelRow.getCell(1).alignment = {
-        vertical: 'top',
-        horizontal: 'left',
-        wrapText: true,
-      };
-
-      // Numeric columns: right-aligned and formatted when numeric
-      periodKeys.forEach((_, idxKey) => {
-        const cell = excelRow.getCell(idxKey + 2);
-        cell.alignment = { horizontal: 'right', vertical: 'middle' };
-        const v = values[idxKey];
-        if (typeof v === 'number') {
-          cell.numFmt = '#,##0';
-        }
-      });
-    });
-
-    // Column widths similar to EDGAR: moderate label, compact numeric columns
     ws.getColumn(1).width = 28;
-    for (let i = 0; i < periodKeys.length; i += 1) {
+    for (let i = 0; i < maxCols - 1; i += 1) {
       ws.getColumn(i + 2).width = 12;
     }
+  }
 
-    // Table outline only inside the extractor table, preserving gridlines elsewhere
-    const firstRow = 1;
-    const lastRow = ws.rowCount;
-    const firstCol = 1;
-    const lastCol = periodKeys.length + 1;
-
-    const outlineBorder = {
-      style: 'thin',
-      color: { argb: 'FF4B5563' },
-    };
-    const innerBorder = {
-      style: 'thin',
-      color: { argb: 'FFFFFFFF' }, // white to mask gridlines inside table
-    };
-
-    // White borders inside table area
-    for (let rowIdx = firstRow; rowIdx <= lastRow; rowIdx += 1) {
-      const excelRow = ws.getRow(rowIdx);
-      for (let colIdx = firstCol; colIdx <= lastCol; colIdx += 1) {
-        const cell = excelRow.getCell(colIdx);
-        cell.border = {
-          top: innerBorder,
-          bottom: innerBorder,
-          left: innerBorder,
-          right: innerBorder,
-        };
-      }
-    }
-
-    // Outline border around full table
-    for (let colIdx = firstCol; colIdx <= lastCol; colIdx += 1) {
-      const topCell = ws.getRow(firstRow).getCell(colIdx);
-      topCell.border = { ...(topCell.border || {}), top: outlineBorder };
-      const bottomCell = ws.getRow(lastRow).getCell(colIdx);
-      bottomCell.border = { ...(bottomCell.border || {}), bottom: outlineBorder };
-    }
-    for (let rowIdx = firstRow; rowIdx <= lastRow; rowIdx += 1) {
-      const leftCell = ws.getRow(rowIdx).getCell(firstCol);
-      leftCell.border = { ...(leftCell.border || {}), left: outlineBorder };
-      const rightCell = ws.getRow(rowIdx).getCell(lastCol);
-      rightCell.border = { ...(rightCell.border || {}), right: outlineBorder };
-    }
-  });
-
-  if (!wb.worksheets.length) return;
+  if (!wb.worksheets.length) return false;
 
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], {
@@ -330,7 +326,8 @@ export async function exportExtractToExcel(extractedTables, fileId = 'extract') 
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${fileId}_tables.xlsx`;
+  a.download = `${baseName}.xlsx`;
   a.click();
   URL.revokeObjectURL(url);
+  return true;
 }
