@@ -64,6 +64,16 @@ function normalizeExtractData(data) {
   return { rows, periodLabels };
 }
 
+function sanitizeDisplayText(value) {
+  if (value == null) return '';
+  return String(value)
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\*/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 const PDF_ZOOM_STEP = 0.25;
 const PDF_ZOOM_MIN = 0.5;
 const PDF_ZOOM_MAX = 2.5;
@@ -96,10 +106,10 @@ function OneTableWithPreview({ tbl, previewUrl }) {
       <div className="extract-text-only">
         {rows.map((r, i) => (
           <div key={i} className="extract-text-row">
-            {r.label}
+            {sanitizeDisplayText(r.label)}
             {r.values && Object.keys(r.values).length > 0 && (
               <span className="extract-text-values">
-                {Object.entries(r.values).map(([k, v]) => `${k}: ${v}`).join(' · ')}
+                {Object.entries(r.values).map(([k, v]) => `${sanitizeDisplayText(k)}: ${sanitizeDisplayText(v)}`).join(' · ')}
               </span>
             )}
           </div>
@@ -121,10 +131,11 @@ function OneTableWithPreview({ tbl, previewUrl }) {
           <tbody>
             {rows.map((row, i) => (
               <tr key={i} className={row.is_section ? 'extract-section-row' : ''}>
-                <td className="extract-td">{row.label}</td>
+                <td className="extract-td">{sanitizeDisplayText(row.label)}</td>
                 {periodLabels.map((key) => {
                   const val = row.values?.[key];
-                  const display = val != null && val !== '' ? String(val) : '—';
+                  const cleaned = sanitizeDisplayText(val);
+                  const display = cleaned !== '' ? cleaned : '—';
                   return (
                     <td key={key} className="extract-td extract-td-value">{display}</td>
                   );

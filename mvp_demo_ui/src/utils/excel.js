@@ -1,19 +1,56 @@
 import ExcelJS from 'exceljs';
 
 /**
- * Try to coerce a raw backend value into a real Excel number when possible,
- * otherwise return the original string/value.
+ * Clean up raw extractor values for Excel export and coerce numeric-looking
+ * strings into real numbers when possible.
  */
+function sanitizeCellString(raw) {
+  if (raw == null) return '';
+  if (typeof raw !== 'string') return raw;
+
+  // Common validator/LLM artifacts seen in extractor output
+  return raw
+    .replace(/<br\s*\/?>/gi, ' ') // remove <br> tags
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\*/g, '') // remove stray asterisks
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function normalizeNumericValue(raw) {
   if (raw == null) return '';
   if (typeof raw === 'number') return raw;
-  if (typeof raw === 'string') {
-    const cleaned = raw.replace(/,/g, '').trim();
-    if (!cleaned) return '';
-    const n = Number(cleaned);
-    return Number.isFinite(n) ? n : raw;
+
+  const s = sanitizeCellString(raw);
+  if (typeof s !== 'string') return s;
+  if (!s) return '';
+  if (s === '—' || s === '–' || s === '-') return '';
+
+  // 1) Detect "(123)" style negatives (optionally with $ and/or % around it)
+  let negative = false;
+  let numericCandidate = s.replace(/[$]/g, '').replace(/%/g, '').trim();
+  const parenMatch = numericCandidate.match(/^\(\s*(.*?)\s*\)$/);
+  if (parenMatch) {
+    negative = true;
+    numericCandidate = parenMatch[1];
   }
-  return raw;
+
+  // 2) Remove formatting noise
+  numericCandidate = numericCandidate
+    .replace(/,/g, '') // thousands separators
+    .replace(/\s+/g, ''); // inner spaces
+
+  // 3) Extract first numeric token (handles cases like "123.4 million")
+  const numMatch = numericCandidate.match(/-?\d+(?:\.\d+)?/);
+  if (numMatch) {
+    const n = Number(numMatch[0]);
+    if (Number.isFinite(n)) {
+      return negative ? -Math.abs(n) : n;
+    }
+  }
+
+  // Not a number: return sanitized text so Excel doesn't get <br> or '*'
+  return s;
 }
 
 /**
@@ -292,7 +329,7 @@ export async function exportExtractToExcel(extractedTables, baseName = 'extract'
       headerRow.alignment = { vertical: 'middle', wrapText: true };
       currentRow += 1;
       rows.forEach((row) => {
-        const label = row.label ?? '';
+        const label = sanitizeCellString(row.label ?? '');
         const vals = row.values || {};
         const values = periodKeys.map((k) => normalizeNumericValue(vals[k]));
         const excelRow = ws.addRow([label, ...values]);
