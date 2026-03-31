@@ -45,6 +45,38 @@ function detectNumericColumns(rows, periodKeys) {
   return periodKeys.filter((k) => numericCounts[k] >= Math.max(1, rows.length * 0.3));
 }
 
+function getPeriodKeysFromData(data, sampleRow) {
+  const cols = Array.isArray(data?.columns) ? data.columns : [];
+  const fromColumns = cols
+    .map((c) => (c == null ? '' : String(c).trim()))
+    .filter(Boolean);
+  if (fromColumns.length) return fromColumns;
+
+  const periods = data?.periods || [];
+  const vals = (sampleRow && typeof sampleRow.values === 'object') ? sampleRow.values : {};
+  const fromPeriods = periods
+    .map((p) => {
+      if (typeof p === 'object' && p != null) {
+        const label = typeof p.label === 'string' ? p.label.trim() : '';
+        const yearStr = p.year != null ? String(p.year) : '';
+        if (label && label in vals) return label;
+        if (yearStr && yearStr in vals) return yearStr;
+        return label || yearStr || '';
+      }
+      return String(p);
+    })
+    .filter(Boolean);
+  if (fromPeriods.length) return fromPeriods;
+
+  const allKeys = [];
+  (data?.rows || []).forEach((r) => {
+    Object.keys(r?.values || {}).forEach((k) => {
+      if (!allKeys.includes(k)) allKeys.push(k);
+    });
+  });
+  return allKeys;
+}
+
 /**
  * Analyze a single extracted table.
  * Returns { tableType, insights[], chartData[], biggestMovers[], outliers[], distribution[] }
@@ -75,19 +107,15 @@ export function analyzeTable(tbl) {
 
   if (data.rows && data.rows.length) {
     rows = data.rows;
-    const periods = data.periods || [];
-    periodKeys = periods.map((p) =>
-      typeof p === 'object' ? String(p.year ?? p.label ?? '') : String(p)
-    ).filter(Boolean);
-    if (!periodKeys.length && rows[0]?.values && typeof rows[0].values === 'object') {
-      periodKeys = Object.keys(rows[0].values);
-    }
+    periodKeys = getPeriodKeysFromData(data, rows[0]);
   } else if (data.sections?.length) {
     data.sections.forEach((sec) => {
       const items = sec.items || [];
-      const keys = (sec.periods || []).map((p) =>
-        typeof p === 'object' ? String(p.year ?? p.label ?? '') : String(p)
-      ).filter(Boolean);
+      const keys = Array.isArray(sec.columns) && sec.columns.length
+        ? sec.columns.map((c) => String(c).trim()).filter(Boolean)
+        : (sec.periods || []).map((p) =>
+          typeof p === 'object' ? String(p.label ?? p.year ?? '') : String(p)
+        ).filter(Boolean);
       if (keys.length && !periodKeys.length) periodKeys = keys;
       items.forEach((item) => {
         rows.push({
