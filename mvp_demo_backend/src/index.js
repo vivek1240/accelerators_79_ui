@@ -38,7 +38,7 @@ async function start() {
   }
   app.listen(config.port, () => {
     console.log(`MVP demo backend listening on port ${config.port}`);
-    console.log(`Auth: /auth/signup, /auth/login, /auth/users (admin), PATCH /auth/users/:id/access (admin)`);
+    console.log(`Auth (dummy): /auth/signup, /auth/login; /auth/users, PATCH /auth/users/:id/access (open)`);
     console.log(`Proxy to FastAPI: ${config.fastapiUrl || '(not set)'} (localhost forced to http)`);
   });
 }

@@ -3,7 +3,6 @@ const axios = require('axios');
 const FormData = require('form-data');
 const multer = require('multer');
 const config = require('../config');
-const { requireAuth, requireAllowed } = require('../middleware/auth');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -22,13 +21,9 @@ const fastapi = axios.create({
   maxBodyLength: Infinity,
 });
 
-/** All proxy routes require auth + is_allowed (except health which we expose ourselves or proxy). */
-const requireAllowedForProxy = [requireAuth, requireAllowed];
-
 /** Forward JSON body to FastAPI POST /route */
 router.post(
   '/route',
-  requireAllowedForProxy,
   express.json(),
   async (req, res) => {
     try {
@@ -47,7 +42,6 @@ router.post(
 /** Forward multipart upload to FastAPI POST /upload */
 router.post(
   '/upload',
-  requireAllowedForProxy,
   upload.single('file'),
   async (req, res) => {
     try {
@@ -56,7 +50,7 @@ router.post(
         form.append('file', req.file.buffer, { filename: req.file.originalname || 'file.pdf' });
       }
       // FastAPI /upload requires user_id (Form)
-      form.append('user_id', req.user?.user_id ?? '');
+      form.append('user_id', config.anonymousUserId);
       if (req.body?.metadata) form.append('metadata', req.body.metadata);
       const { data } = await fastapi.post('/upload', form, {
         headers: form.getHeaders(),
@@ -73,7 +67,7 @@ router.post(
 );
 
 /** GET /status/:file_id */
-router.get('/status/:file_id', requireAllowedForProxy, async (req, res) => {
+router.get('/status/:file_id', async (req, res) => {
   try {
     const { data } = await fastapi.get(`/status/${req.params.file_id}`);
     res.json(data);
@@ -83,7 +77,7 @@ router.get('/status/:file_id', requireAllowedForProxy, async (req, res) => {
 });
 
 /** GET /pages/:file_id */
-router.get('/pages/:file_id', requireAllowedForProxy, async (req, res) => {
+router.get('/pages/:file_id', async (req, res) => {
   try {
     const { data } = await fastapi.get(`/pages/${req.params.file_id}`);
     res.json(data);
@@ -93,7 +87,7 @@ router.get('/pages/:file_id', requireAllowedForProxy, async (req, res) => {
 });
 
 /** GET /pages/:file_id/preview-by-page/:page_number (returns blob; 1-based PDF page) */
-router.get('/pages/:file_id/preview-by-page/:page_number', requireAllowedForProxy, async (req, res) => {
+router.get('/pages/:file_id/preview-by-page/:page_number', async (req, res) => {
   try {
     const r = await fastapi.get(
       `/pages/${req.params.file_id}/preview-by-page/${req.params.page_number}`,
@@ -108,7 +102,7 @@ router.get('/pages/:file_id/preview-by-page/:page_number', requireAllowedForProx
 });
 
 /** GET /pages/:file_id/:page_index/preview (returns blob) */
-router.get('/pages/:file_id/:page_index/preview', requireAllowedForProxy, async (req, res) => {
+router.get('/pages/:file_id/:page_index/preview', async (req, res) => {
   try {
     const r = await fastapi.get(
       `/pages/${req.params.file_id}/${req.params.page_index}/preview`,
@@ -125,7 +119,6 @@ router.get('/pages/:file_id/:page_index/preview', requireAllowedForProxy, async 
 /** POST /extract */
 router.post(
   '/extract',
-  requireAllowedForProxy,
   express.json(),
   async (req, res) => {
     try {
@@ -140,7 +133,6 @@ router.post(
 /** POST /analyze — LLM narration of pre-computed table insights */
 router.post(
   '/analyze',
-  requireAllowedForProxy,
   express.json(),
   async (req, res) => {
     try {
@@ -152,14 +144,13 @@ router.post(
   }
 );
 
-/** POST /query - FastAPI requires file_id, user_id, question; inject user_id from auth */
+/** POST /query - FastAPI requires file_id, user_id, question */
 router.post(
   '/query',
-  requireAllowedForProxy,
   express.json(),
   async (req, res) => {
     try {
-      const body = { ...req.body, user_id: req.user?.user_id ?? '' };
+      const body = { ...req.body, user_id: config.anonymousUserId };
       const { data } = await fastapi.post('/query', body);
       res.json(data);
     } catch (err) {
@@ -169,7 +160,7 @@ router.post(
 );
 
 /** GET /edgar/:ticker */
-router.get('/edgar/:ticker', requireAllowedForProxy, async (req, res) => {
+router.get('/edgar/:ticker', async (req, res) => {
   try {
     const { data } = await fastapi.get(`/edgar/${req.params.ticker}`, {
       params: req.query,
@@ -181,7 +172,7 @@ router.get('/edgar/:ticker', requireAllowedForProxy, async (req, res) => {
 });
 
 /** GET /documents */
-router.get('/documents', requireAllowedForProxy, async (req, res) => {
+router.get('/documents', async (req, res) => {
   try {
     const { data } = await fastapi.get('/documents', { params: req.query });
     res.json(data);
@@ -191,7 +182,7 @@ router.get('/documents', requireAllowedForProxy, async (req, res) => {
 });
 
 /** GET /filters */
-router.get('/filters', requireAllowedForProxy, async (req, res) => {
+router.get('/filters', async (req, res) => {
   try {
     const { data } = await fastapi.get('/filters', { params: req.query });
     res.json(data);
@@ -201,7 +192,7 @@ router.get('/filters', requireAllowedForProxy, async (req, res) => {
 });
 
 /** DELETE /files/:file_id */
-router.delete('/files/:file_id', requireAllowedForProxy, async (req, res) => {
+router.delete('/files/:file_id', async (req, res) => {
   try {
     const { data } = await fastapi.delete(`/files/${req.params.file_id}`);
     res.json(data);

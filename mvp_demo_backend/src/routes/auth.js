@@ -1,39 +1,37 @@
+const crypto = require('crypto');
 const express = require('express');
-const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const config = require('../config');
-const { requireAuth, requireAdmin } = require('../middleware/auth');
 
 const router = express.Router();
-const BCRYPT_MAX_BYTES = 72;
 
-function truncateForBcrypt(str) {
-  const buf = Buffer.from(str, 'utf8').subarray(0, BCRYPT_MAX_BYTES);
-  return buf.toString('utf8');
+/** Stable dummy id from email (no DB). */
+function emailToDummyUserId(email) {
+  const norm = (email || '').trim().toLowerCase() || 'anonymous';
+  return crypto.createHash('sha256').update(norm).digest('hex').slice(0, 24);
 }
 
-function createToken(user) {
-  return jwt.sign(
-    { sub: user._id.toString(), email: user.email },
+function dummyAuthResponse({ email, name, isSignup }) {
+  const emailNorm = (email || '').trim().toLowerCase();
+  const userId = emailToDummyUserId(emailNorm);
+  const token = jwt.sign(
+    { sub: userId, email: emailNorm || 'user@local' },
     config.jwtSecret,
     { expiresIn: `${config.jwtExpireDays}d` }
   );
-}
-
-function toTokenResponse(user, token) {
   return {
     access_token: token,
     token_type: 'bearer',
-    user_id: user._id.toString(),
-    email: user.email,
-    name: user.name ?? null,
-    role: user.role || 'user',
-    is_allowed: user.is_allowed ?? false,
+    user_id: userId,
+    email: emailNorm || 'user@local',
+    name: isSignup ? (name || '').trim() || null : emailNorm ? emailNorm.split('@')[0] : 'User',
+    role: 'user',
+    is_allowed: true,
   };
 }
 
-/** POST /auth/signup */
+/** POST /auth/signup — dummy: no DB, always succeeds when validation passes */
 router.post('/signup', async (req, res) => {
   try {
     const { name, email, password } = req.body || {};
@@ -43,22 +41,7 @@ router.post('/signup', async (req, res) => {
         detail: { code: 'VALIDATION_ERROR', message: 'Email and password (min 6) required.' },
       });
     }
-    const existing = await User.findOne({ email: emailNorm });
-    if (existing) {
-      return res.status(400).json({
-        detail: { code: 'EMAIL_TAKEN', message: 'An account with this email already exists' },
-      });
-    }
-    const hashed = await bcrypt.hash(truncateForBcrypt(password), 10);
-    const user = await User.create({
-      email: emailNorm,
-      hashed_password: hashed,
-      name: (name || '').trim() || null,
-      role: 'user',
-      is_allowed: false,
-    });
-    const token = createToken(user);
-    return res.json(toTokenResponse(user, token));
+    return res.json(dummyAuthResponse({ email: emailNorm, name, isSignup: true }));
   } catch (err) {
     console.error('Signup error:', err);
     return res.status(503).json({
@@ -67,7 +50,7 @@ router.post('/signup', async (req, res) => {
   }
 });
 
-/** POST /auth/login */
+/** POST /auth/login — dummy: no DB verification */
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body || {};
@@ -77,14 +60,7 @@ router.post('/login', async (req, res) => {
         detail: { code: 'VALIDATION_ERROR', message: 'Email and password required.' },
       });
     }
-    const user = await User.findOne({ email: emailNorm });
-    if (!user || !(await bcrypt.compare(truncateForBcrypt(password), user.hashed_password))) {
-      return res.status(401).json({
-        detail: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' },
-      });
-    }
-    const token = createToken(user);
-    return res.json(toTokenResponse(user, token));
+    return res.json(dummyAuthResponse({ email: emailNorm, isSignup: false }));
   } catch (err) {
     console.error('Login error:', err);
     return res.status(503).json({
@@ -93,12 +69,11 @@ router.post('/login', async (req, res) => {
   }
 });
 
-/** GET /auth/users (admin only) */
-router.get('/users', requireAuth, requireAdmin, async (req, res) => {
+/** GET /auth/users — list users (Mongo), no auth gate */
+router.get('/users', async (req, res) => {
   try {
     const users = await User.find({}).sort({ createdAt: -1 }).lean();
     const list = users.map((u) => {
-      // Handle createdAt whether it's a Date object, string, or MongoDB $date format
       let createdAt = null;
       if (u.createdAt) {
         if (typeof u.createdAt.toISOString === 'function') {
@@ -125,8 +100,8 @@ router.get('/users', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-/** PATCH /auth/users/:user_id/access (admin only) */
-router.patch('/users/:user_id/access', requireAuth, requireAdmin, async (req, res) => {
+/** PATCH /auth/users/:user_id/access — no auth gate */
+router.patch('/users/:user_id/access', async (req, res) => {
   try {
     const { user_id } = req.params;
     const { is_allowed } = req.body || {};

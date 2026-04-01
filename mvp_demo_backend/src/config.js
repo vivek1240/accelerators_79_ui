@@ -21,4 +21,6 @@ module.exports = {
   jwtExpireDays: parseInt(process.env.JWT_EXPIRE_DAYS || '7', 10),
   fastapiUrl: normalizeFastapiUrl(process.env.FASTAPI_URL),
   fastapiApiKey: process.env.FASTAPI_API_KEY || '',
+  /** Forwarded to FastAPI upload/query when not using per-user auth */
+  anonymousUserId: process.env.ANONYMOUS_USER_ID || '',
 };
