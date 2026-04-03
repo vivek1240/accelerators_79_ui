@@ -49,8 +49,12 @@ router.post(
       if (req.file) {
         form.append('file', req.file.buffer, { filename: req.file.originalname || 'file.pdf' });
       }
-      // FastAPI /upload requires user_id (Form)
-      form.append('user_id', config.anonymousUserId);
+      // FastAPI /upload requires user_id (Form); prefer client-provided id (e.g. per-page-load from UI)
+      const fromClient = req.body?.user_id != null && String(req.body.user_id).trim() !== ''
+        ? String(req.body.user_id).trim()
+        : '';
+      const userId = fromClient || config.anonymousUserId;
+      form.append('user_id', userId);
       if (req.body?.metadata) form.append('metadata', req.body.metadata);
       const { data } = await fastapi.post('/upload', form, {
         headers: form.getHeaders(),
@@ -150,7 +154,11 @@ router.post(
   express.json(),
   async (req, res) => {
     try {
-      const body = { ...req.body, user_id: config.anonymousUserId };
+      const fromClient = req.body?.user_id != null && String(req.body.user_id).trim() !== ''
+        ? String(req.body.user_id).trim()
+        : '';
+      const userId = fromClient || config.anonymousUserId;
+      const body = { ...req.body, user_id: userId };
       const { data } = await fastapi.post('/query', body);
       res.json(data);
     } catch (err) {

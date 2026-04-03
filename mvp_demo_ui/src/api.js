@@ -13,6 +13,15 @@ const api = axios.create({
   timeout: 300000,
 });
 
+/** New id each full page load (FastAPI requires non-empty user_id for /upload and /query). */
+function randomObjectIdHex() {
+  const bytes = new Uint8Array(12);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+const sessionUserId = randomObjectIdHex();
+
 // Don't set Content-Type for FormData - let browser set multipart/form-data with boundary
 api.interceptors.request.use((config) => {
   if (config.data instanceof FormData && config.headers) {
@@ -66,6 +75,7 @@ export async function route(query, pdfUploaded = false) {
 export async function upload(file) {
   const form = new FormData();
   form.append('file', file);
+  form.append('user_id', sessionUserId);
   const { data } = await api.post('/upload', form, { timeout: 180000 });
   return data;
 }
@@ -100,6 +110,7 @@ export async function query(fileId, question) {
   const { data } = await api.post('/query', {
     file_id: fileId,
     question,
+    user_id: sessionUserId,
     auto_detect_filters: true,
   });
   return data;
