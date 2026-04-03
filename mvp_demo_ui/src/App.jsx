@@ -1,7 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import * as api from './api';
 const getError = api.getErrorMessage;
-import Auth from './components/Auth';
 import AdminDashboard from './components/AdminDashboard';
 import EdgarTables from './components/EdgarTables';
 import ExtractorFlow from './components/ExtractorFlow';
@@ -33,14 +32,6 @@ function genId() {
 }
 
 export default function App() {
-  const [user, setUser] = useState(() => {
-    const stored = api.getStoredAuth();
-    if (stored?.token && stored?.user) {
-      api.setAuthToken(stored.token, stored.user);
-      return stored.user;
-    }
-    return null;
-  });
   const [activeTab, setActiveTab] = useState('edgar');
   const [sharedPdf, setSharedPdf] = useState({
     fileId: null,
@@ -149,28 +140,6 @@ export default function App() {
   const showToast = useCallback((text, isError = false) => {
     setToast({ text, isError });
     setTimeout(() => setToast(null), 4000);
-  }, []);
-
-  useEffect(() => {
-    api.setUnauthorizedHandler(() => setUser(null));
-    return () => api.setUnauthorizedHandler(null);
-  }, []);
-
-  const handleAuthenticated = useCallback((data) => {
-    const userInfo = {
-      user_id: data.user_id,
-      email: data.email ?? '',
-      name: data.name ?? null,
-      role: data.role ?? 'user',
-      is_allowed: data.is_allowed ?? false,
-    };
-    api.setAuthToken(data.access_token, userInfo);
-    setUser(userInfo);
-  }, []);
-
-  const handleLogout = useCallback(() => {
-    api.clearAuthToken();
-    setUser(null);
   }, []);
 
   const pollStatus = useCallback(async (fid) => {
@@ -380,27 +349,6 @@ export default function App() {
 
   const showChatInput = (activeTab === 'edgar' || activeTab === 'rag') && activeTab !== 'admin';
 
-  if (!user) {
-    return <Auth onAuthenticated={handleAuthenticated} />;
-  }
-
-  // Logged in but not allowed (and not admin): show request-access card only
-  if (!user.is_allowed && user.role !== 'admin') {
-    return (
-      <div className="app-layout request-access-layout">
-        <div className="request-access-card">
-          <h1 className="request-access-title">Ask admin for access</h1>
-          <p className="request-access-text">
-            Your account is not yet approved. Please contact an administrator to get access to the app.
-          </p>
-          <button type="button" className="btn-primary auth-submit" onClick={handleLogout}>
-            Log out
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="app-layout">
       <Sidebar
@@ -410,9 +358,7 @@ export default function App() {
         filename={filename}
         onPdfUpload={handlePdfUpload}
         uploading={uploading}
-        onLogout={handleLogout}
-        userEmail={user.email}
-        userRole={user.role}
+        userRole="user"
       />
       <div className="main-area">
         <main className="app-main">

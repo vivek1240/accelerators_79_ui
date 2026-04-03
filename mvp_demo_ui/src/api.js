@@ -6,57 +6,12 @@ if (import.meta.env.DEV) {
   console.log('[API] baseURL:', BASE);
 }
 
-const AUTH_STORAGE_KEY = 'agentic_router_auth';
-
 const api = axios.create({
   baseURL: BASE,
   headers: { 'Content-Type': 'application/json' },
   // Allow long-running RAG queries on large documents (5 minutes by default).
   timeout: 300000,
 });
-
-let onUnauthorized = null;
-
-/** Call when 401/503 auth so UI can clear user and show login */
-export function setUnauthorizedHandler(cb) {
-  onUnauthorized = cb;
-}
-
-/** Get stored auth from localStorage */
-export function getStoredAuth() {
-  try {
-    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Persist token and user to localStorage and set default header */
-export function setAuthToken(token, user) {
-  if (token) {
-    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    if (user) {
-      try {
-        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ token, user }));
-      } catch {}
-    }
-  }
-}
-
-/** Clear token and localStorage */
-export function clearAuthToken() {
-  delete api.defaults.headers.common['Authorization'];
-  try {
-    localStorage.removeItem(AUTH_STORAGE_KEY);
-  } catch {}
-}
-
-// Attach Authorization header from storage on load
-const stored = getStoredAuth();
-if (stored?.token) {
-  api.defaults.headers.common['Authorization'] = `Bearer ${stored.token}`;
-}
 
 // Don't set Content-Type for FormData - let browser set multipart/form-data with boundary
 api.interceptors.request.use((config) => {
@@ -66,18 +21,9 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Log API errors and clear auth on 401/503 auth-related errors
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    const status = err.response?.status;
-    const detail = err.response?.data?.detail;
-    const code = typeof detail === 'object' ? detail?.code : null;
-    const authCodes = ['INVALID_TOKEN', 'USER_NOT_FOUND', 'UNAUTHORIZED', 'AUTH_NOT_AVAILABLE', 'AUTH_NOT_CONFIGURED'];
-    if ((status === 401 || status === 503) && (code && authCodes.includes(code))) {
-      clearAuthToken();
-      if (typeof onUnauthorized === 'function') onUnauthorized();
-    }
     const url = err.config?.baseURL + err.config?.url;
     const method = err.config?.method?.toUpperCase();
     const data = err.response?.data;
@@ -85,7 +31,7 @@ api.interceptors.response.use(
     console.error('[API Error]', {
       method,
       url,
-      status,
+      status: err.response?.status,
       code: codeErr,
       message: err.message,
       responseData: data,
@@ -100,23 +46,13 @@ export async function health() {
   return data;
 }
 
-export async function signup(body) {
-  const { data } = await api.post('/auth/signup', body);
-  return data;
-}
-
-export async function login(body) {
-  const { data } = await api.post('/auth/login', body);
-  return data;
-}
-
-/** Admin: list all users (requires role === 'admin') */
+/** Admin: list users (backend has no auth gate) */
 export async function listUsers() {
   const { data } = await api.get('/auth/users');
   return data;
 }
 
-/** Admin: set user access (requires role === 'admin') */
+/** Admin: set user access */
 export async function setUserAccess(userId, isAllowed) {
   const { data } = await api.patch(`/auth/users/${userId}/access`, { is_allowed: isAllowed });
   return data;
@@ -159,13 +95,6 @@ export async function extract(fileId, pageIndices) {
   const { data } = await api.post('/extract', { file_id: fileId, page_indices: pageIndices });
   return data;
 }
-
-// Advanced analysis endpoint is currently disabled from the UI.
-// Keep this helper around so it can be re-enabled later without re-writing it.
-// export async function analyze(tables, filename) {
-//   const { data } = await api.post('/analyze', { tables, filename });
-//   return data;
-// }
 
 export async function query(fileId, question) {
   const { data } = await api.post('/query', {

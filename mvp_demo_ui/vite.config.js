@@ -6,7 +6,7 @@ export default defineConfig({
   server: {
     port: 5174,
     proxy: {
-      // In dev, /api is forwarded to local backend so signup/login and all routes work locally.
+      // In dev, /api is forwarded to the local Node backend.
       // Set VITE_API_PROXY_TARGET to use another backend (e.g. Railway URL).
       '/api': {
         target: process.env.VITE_API_PROXY_TARGET || 'http://localhost:4000',
