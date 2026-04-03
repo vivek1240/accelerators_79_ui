@@ -21,3 +21,4 @@ yarn-error.log*
 .idea
 .vscode/
 
+backend_api_guide.md
