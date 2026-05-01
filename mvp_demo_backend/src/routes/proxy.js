@@ -148,25 +148,6 @@ router.post(
   }
 );
 
-/** POST /query - FastAPI requires file_id, user_id, question */
-router.post(
-  '/query',
-  express.json(),
-  async (req, res) => {
-    try {
-      const fromClient = req.body?.user_id != null && String(req.body.user_id).trim() !== ''
-        ? String(req.body.user_id).trim()
-        : '';
-      const userId = fromClient || config.anonymousUserId;
-      const body = { ...req.body, user_id: userId };
-      const { data } = await fastapi.post('/query', body);
-      res.json(data);
-    } catch (err) {
-      res.status(err.response?.status || 502).json(err.response?.data ?? {});
-    }
-  }
-);
-
 /** GET /edgar/:ticker */
 router.get('/edgar/:ticker', async (req, res) => {
   try {
@@ -208,5 +189,57 @@ router.delete('/files/:file_id', async (req, res) => {
     res.status(err.response?.status || 502).json(err.response?.data ?? {});
   }
 });
+
+// ── MAG (Memory-Augmented Generation) endpoints ──
+
+/** GET /mag/memories */
+router.get('/mag/memories', async (req, res) => {
+  try {
+    const { data } = await fastapi.get('/mag/memories', { params: req.query });
+    res.json(data);
+  } catch (err) {
+    res.status(err.response?.status || 502).json(err.response?.data ?? {});
+  }
+});
+
+/** POST /mag/query — non-streaming */
+router.post(
+  '/mag/query',
+  express.json(),
+  async (req, res) => {
+    try {
+      const { data } = await fastapi.post('/mag/query', req.body);
+      res.json(data);
+    } catch (err) {
+      res.status(err.response?.status || 502).json(err.response?.data ?? {});
+    }
+  }
+);
+
+/** POST /mag/query/stream — SSE pass-through */
+router.post(
+  '/mag/query/stream',
+  express.json(),
+  async (req, res) => {
+    try {
+      const response = await fastapi.post('/mag/query/stream', req.body, {
+        responseType: 'stream',
+        timeout: 300000,
+        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      });
+      res.set({
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'X-Accel-Buffering': 'no',
+        Connection: 'keep-alive',
+      });
+      response.data.pipe(res);
+    } catch (err) {
+      const status = err.response?.status || 502;
+      const body = err.response?.data ?? { detail: { message: err.message } };
+      res.status(status).json(body);
+    }
+  }
+);
 
 module.exports = router;

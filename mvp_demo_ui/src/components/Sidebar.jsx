@@ -1,5 +1,5 @@
 /**
- * Left sidebar: PDF upload, flow tabs (EDGAR / Extract / Advanced chatbot), workspace doc indicator.
+ * Left sidebar: multi-PDF upload, flow tabs, document list (focus + chat scope).
  */
 const TABS = [
   { id: 'edgar', label: 'EDGAR', description: 'Get data for publicly listed companies' },
@@ -10,20 +10,32 @@ const TABS = [
 
 const ADMIN_TAB = { id: 'admin', label: 'Admin', description: 'User access' };
 
+function docStatusLine(doc) {
+  if (doc.magError) return 'MAG error';
+  if (doc.magProcessing || doc.chatbotProcessing) return 'Processing…';
+  if (doc.magReady && doc.memoryId) return 'Analyst memory ready';
+  if (doc.chatbotReady) return 'Chat ready';
+  return 'Pending';
+}
+
 export default function Sidebar({
   activeTab,
   onTabChange,
-  fileId = null,
-  filename = null,
+  documents = [],
+  focusedFileId = null,
+  onFocusFile = null,
+  selectedChatFileIds = null,
+  onToggleChatFile = null,
   onPdfUpload = null,
   uploading = false,
-  onNewChat = null,
   onLogout = null,
   userEmail = null,
   userRole = 'user',
   className = '',
 }) {
   const tabs = userRole === 'admin' ? [...TABS, ADMIN_TAB] : TABS;
+  const selected = selectedChatFileIds instanceof Set ? selectedChatFileIds : new Set();
+
   return (
     <aside className={`sidebar ${className}`}>
       <div className="sidebar-brand">
@@ -42,22 +54,27 @@ export default function Sidebar({
           <input
             type="file"
             accept=".pdf"
+            multiple
             disabled={uploading}
             onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f && onPdfUpload) onPdfUpload(f);
+              const files = e.target.files;
+              if (files?.length && onPdfUpload) onPdfUpload(files);
               e.target.value = '';
             }}
             className="sidebar-upload-input"
             aria-label="Upload PDF"
           />
           <span className="sidebar-upload-label">
-            {uploading ? 'Uploading PDF…' : filename ? filename : 'Upload PDF'}
+            {uploading
+              ? 'Uploading…'
+              : documents.length
+                ? `Add PDF (${documents.length} loaded)`
+                : 'Upload PDF'}
           </span>
           {uploading && (
             <span className="sidebar-upload-helper">
               <span className="sidebar-upload-dots" aria-hidden="true" />
-              Preparing pages and tables so you can extract and chat with your document.
+              Preparing pages, tables, and analyst memory for chat.
             </span>
           )}
         </label>
@@ -89,15 +106,38 @@ export default function Sidebar({
         </div>
 
         <div className="sidebar-section">
-          <div className="sidebar-label">Document</div>
+          <div className="sidebar-label">Documents</div>
           <div className="sidebar-workspace">
-            {fileId && filename ? (
-              <div className="sidebar-workspace-doc">
-                <span className="sidebar-workspace-doc-icon">📄</span>
-                <span className="sidebar-workspace-doc-name" title={filename}>{filename}</span>
-              </div>
-            ) : (
+            {documents.length === 0 ? (
               <p className="sidebar-workspace-empty">No PDF uploaded</p>
+            ) : (
+              <ul className="sidebar-doc-list">
+                {documents.map((doc) => {
+                  const isFocus = doc.fileId === focusedFileId;
+                  const inChat = selected.has(doc.fileId);
+                  return (
+                    <li key={doc.fileId} className={`sidebar-doc-row ${isFocus ? 'sidebar-doc-row-focus' : ''}`}>
+                      <label className="sidebar-doc-chat" title="Include in Advanced chatbot context">
+                        <input
+                          type="checkbox"
+                          checked={inChat}
+                          onChange={() => onToggleChatFile?.(doc.fileId)}
+                          aria-label={`Chat context: ${doc.filename}`}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="sidebar-doc-main"
+                        onClick={() => onFocusFile?.(doc.fileId)}
+                        title="Focus for Extract / workspace"
+                      >
+                        <span className="sidebar-doc-name" title={doc.filename}>{doc.filename}</span>
+                        <span className="sidebar-doc-meta">{docStatusLine(doc)}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </div>
         </div>

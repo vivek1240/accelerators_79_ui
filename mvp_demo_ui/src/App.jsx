@@ -33,12 +33,12 @@ function genId() {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('edgar');
-  const [sharedPdf, setSharedPdf] = useState({
-    fileId: null,
-    filename: null,
-    chatbotReady: false,
-    chatbotProcessing: false,
-  });
+  /** @type {{ fileId: string, filename: string, memoryId?: string|null, parsed?: boolean, magReady?: boolean, magProcessing?: boolean, magError?: string|null, chatbotReady?: boolean, chatbotProcessing?: boolean }[]} */
+  const [documents, setDocuments] = useState([]);
+  const [focusedFileId, setFocusedFileId] = useState(null);
+  /** fileIds included in MAG / chat context */
+  const [selectedChatFileIds, setSelectedChatFileIds] = useState(() => new Set());
+  const [deepThinking, setDeepThinking] = useState(true);
   const [edgarMessages, setEdgarMessages] = useState([]);
   const [extractMessages, setExtractMessages] = useState([]);
   const [ragMessages, setRagMessages] = useState([]);
@@ -55,7 +55,32 @@ export default function App() {
   const [extractedPageIndices, setExtractedPageIndices] = useState(() => new Set());
   const [pagePreviewUrls, setPagePreviewUrls] = useState({});
 
-  const { fileId, filename, chatbotReady, chatbotProcessing } = sharedPdf;
+  const [streamingMsgId, setStreamingMsgId] = useState(null);
+
+  const focusedDoc = useMemo(
+    () => documents.find((d) => d.fileId === focusedFileId) || documents[documents.length - 1] || null,
+    [documents, focusedFileId]
+  );
+  const fileId = focusedDoc?.fileId ?? null;
+  const filename = focusedDoc?.filename ?? null;
+
+  const readyMemoryIdsForChat = useMemo(() => {
+    const pool =
+      selectedChatFileIds.size > 0
+        ? documents.filter((d) => selectedChatFileIds.has(d.fileId))
+        : documents;
+    return pool.filter((d) => d.memoryId && d.magReady).map((d) => d.memoryId);
+  }, [documents, selectedChatFileIds]);
+
+  const anyMagReady = useMemo(
+    () => documents.some((d) => d.magReady && d.memoryId),
+    [documents]
+  );
+
+  const chatbotProcessing = useMemo(
+    () => documents.some((d) => d.magProcessing || d.chatbotProcessing),
+    [documents]
+  );
 
   const messagesByTab = useMemo(
     () => ({ edgar: edgarMessages, extract: extractMessages, rag: ragMessages }),
@@ -142,79 +167,104 @@ export default function App() {
     setTimeout(() => setToast(null), 4000);
   }, []);
 
+  const toggleChatFile = useCallback((fid) => {
+    setSelectedChatFileIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(fid)) next.delete(fid);
+      else next.add(fid);
+      return next;
+    });
+  }, []);
+
   const pollStatus = useCallback(async (fid) => {
     for (let i = 0; i < 60; i++) {
       try {
         const res = await api.status(fid);
         const d = res?.data;
+        setDocuments((prev) =>
+          prev.map((doc) =>
+            doc.fileId === fid
+              ? {
+                  ...doc,
+                  parsed: d?.parsed ?? doc.parsed,
+                  chatbotReady: d?.chatbot_ready ?? doc.chatbotReady,
+                  chatbotProcessing: d?.chatbot_processing ?? false,
+                  magReady: d?.mag_ready ?? doc.magReady,
+                  magProcessing: d?.mag_processing ?? false,
+                  magError: d?.mag_error ?? doc.magError,
+                  memoryId: d?.memory_id || doc.memoryId,
+                }
+              : doc
+          )
+        );
+        if (d?.mag_error) {
+          showToast(d.mag_error, true);
+          return false;
+        }
         if (d?.chatbot_ready) {
-          setSharedPdf((p) => ({ ...p, chatbotReady: true, chatbotProcessing: false }));
+          setSelectedChatFileIds((prev) => new Set(prev).add(fid));
           return true;
         }
         if (d?.chatbot_error) {
-          setSharedPdf((p) => ({ ...p, chatbotProcessing: false }));
           showToast(d.chatbot_error, true);
           return false;
         }
-        setSharedPdf((p) => ({ ...p, chatbotProcessing: d?.chatbot_processing ?? true }));
       } catch (_) {}
       await new Promise((r) => setTimeout(r, 3000));
     }
-    setSharedPdf((p) => ({ ...p, chatbotProcessing: false }));
     showToast('Ingestion timed out', true);
     return false;
   }, [showToast]);
 
   const handlePdfUpload = useCallback(
-    async (file) => {
-      if (!file?.name?.toLowerCase().endsWith('.pdf')) {
-        showToast('Please select a PDF file', true);
+    async (fileOrFiles) => {
+      const raw = fileOrFiles?.length != null ? Array.from(fileOrFiles) : [fileOrFiles];
+      const files = raw.filter((f) => f?.name?.toLowerCase?.().endsWith('.pdf'));
+      if (!files.length) {
+        showToast('Please select one or more PDF files', true);
         return;
       }
       setUploading(true);
-      setSharedPdf({
-        fileId: null,
-        filename: null,
-        chatbotReady: false,
-        chatbotProcessing: false,
-      });
-      setWorkspaceItems([]);
-      setActiveWorkspaceId(null);
-      setAllExtractedTables([]);
-      // --- NEW CHANGE (inline preview): uncomment next 2 lines to re-enable inline preview ---
-      // setExtractedPageIndices(new Set());
-      // setPagePreviewUrls({});
       try {
-        const res = await api.upload(file);
-        if (!res?.success || !res?.data?.file_id) {
-          showToast(res?.error?.message || 'Upload failed', true);
-          return;
-        }
-        const fid = res.data.file_id;
-        const fname = res.data.filename || file.name;
-        setSharedPdf((p) => ({
-          ...p,
-          fileId: fid,
-          filename: fname,
-          chatbotProcessing: res.data.chatbot_status === 'ingesting',
-          chatbotReady: res.data.chatbot_status !== 'ingesting',
-        }));
-        showToast(
-          res.data.chatbot_status === 'ingesting'
-            ? 'PDF uploaded. Advanced chatbot will be ready when ingestion finishes.'
-            : 'PDF uploaded. Ready for Extract and Advanced chatbot.'
-        );
-        if (res.data.chatbot_status === 'ingesting') {
-          pollStatus(fid);
-        } else {
-          const ingestMsg = {
-            id: Date.now() + 2,
-            role: 'system',
-            text: `Document "${fname}" is ready. You can now extract tables or use the Advanced chatbot.`,
+        for (const file of files) {
+          const res = await api.upload(file);
+          if (!res?.success || !res?.data?.file_id) {
+            showToast(res?.error?.message || 'Upload failed', true);
+            continue;
+          }
+          const fid = res.data.file_id;
+          const fname = res.data.filename || file.name;
+          const ingesting = res.data.chatbot_status === 'ingesting' || res.data.mag_status === 'ingesting';
+          const newDoc = {
+            fileId: fid,
+            filename: fname,
+            memoryId: res.data.memory_id || null,
+            parsed: res.data.parsed ?? true,
+            magReady: res.data.mag_status === 'ready',
+            magProcessing: res.data.mag_status === 'ingesting',
+            magError: null,
+            chatbotReady: res.data.chatbot_status !== 'ingesting',
+            chatbotProcessing: ingesting,
           };
-          setEdgarMessages((prev) => [...prev, ingestMsg]);
-          setExtractMessages((prev) => [...prev, ingestMsg]);
-          setRagMessages((prev) => [...prev, ingestMsg]);
+          setDocuments((prev) => [...prev.filter((d) => d.fileId !== fid), newDoc]);
+          setFocusedFileId(fid);
+          setSelectedChatFileIds((prev) => new Set(prev).add(fid));
+          showToast(
+            ingesting
+              ? `Uploaded "${fname}". MAG / chat processing…`
+              : `Uploaded "${fname}". Ready for Extract and chat.`
+          );
+          if (ingesting) pollStatus(fid);
+          else {
+            const ingestMsg = {
+              id: Date.now() + Math.random(),
+              role: 'system',
+              text: `Document "${fname}" is ready. You can extract tables or chat.`,
+            };
+            setEdgarMessages((prev) => [...prev, ingestMsg]);
+            setExtractMessages((prev) => [...prev, ingestMsg]);
+            setRagMessages((prev) => [...prev, ingestMsg]);
+          }
         }
       } catch (e) {
         showToast(getError(e, 'Upload failed'), true);
@@ -246,6 +296,8 @@ export default function App() {
     const newUserMsg = { id: Date.now(), role: 'user', text: q };
     setCurrentMessages((prev) => [...prev, newUserMsg]);
     setLoading(true);
+
+    let skipFinallyLoading = false;
 
     try {
       if (activeTab === 'edgar') {
@@ -284,44 +336,118 @@ export default function App() {
           showToast(getError(e, 'EDGAR failed'), true);
         }
       } else if (activeTab === 'rag') {
-        if (!fileId) {
-          showToast('Upload a PDF in the sidebar first to use Advanced chatbot', true);
-        } else if (!chatbotReady) {
-          showToast('Document is still ingesting. Advanced chatbot will be available when ready.', true);
+        const memoryIds = readyMemoryIdsForChat;
+        if (memoryIds.length === 0 && documents.length > 0) {
+          showToast(
+            'Advanced chatbot uses MAG only. With PDFs uploaded, wait for analyst memory to be ready or select ready files in sidebar.',
+            true
+          );
         } else {
-          try {
-            const queryRes = await api.query(fileId, q);
-            if (queryRes?.success && queryRes?.data) {
-              appendToCurrentTab({
-                id: Date.now() + 1,
-                role: 'assistant',
-                type: 'query',
-                data: queryRes.data,
-              });
-            } else {
-              showToast(queryRes?.error?.message || 'Query failed', true);
-            }
-          } catch (e) {
-            const code = e?.response?.data?.detail?.code;
-            const msg = getError(e);
-            if (code === 'CHATBOT_NOT_READY') {
-              setSharedPdf((p) => ({ ...p, chatbotReady: false, chatbotProcessing: true }));
-              pollStatus(fileId);
-            }
-            showToast(msg || 'Query failed', true);
-          }
+          const msgId = Date.now() + 1;
+
+          appendToCurrentTab({
+            id: msgId,
+            role: 'assistant',
+            type: 'query',
+            streaming: true,
+            data: { question: q, answer: '', route: null, model: null },
+          });
+          setStreamingMsgId(msgId);
+
+          api.magQueryStream({
+            question: q,
+            memoryIds,
+            deepThinking,
+            sessionId: `rag_${api.sessionUserId}`,
+            onMeta: (meta) => {
+              setRagMessages((prev) =>
+                prev.map((m) =>
+                  m.id === msgId
+                    ? { ...m, data: { ...m.data, route: meta.route, model: meta.model } }
+                    : m
+                )
+              );
+            },
+            onChunk: (text) => {
+              setRagMessages((prev) =>
+                prev.map((m) =>
+                  m.id === msgId
+                    ? { ...m, data: { ...m.data, answer: (m.data.answer || '') + text } }
+                    : m
+                )
+              );
+            },
+            onDone: (evt) => {
+              setRagMessages((prev) =>
+                prev.map((m) =>
+                  m.id === msgId
+                    ? {
+                        ...m,
+                        streaming: false,
+                        data: {
+                          ...m.data,
+                          ...(Array.isArray(evt?.chunks) && evt.chunks.length
+                            ? { chunks: evt.chunks }
+                            : {}),
+                          ...(evt?.filters_applied != null
+                            ? { filters_applied: evt.filters_applied }
+                            : {}),
+                        },
+                      }
+                    : m
+                )
+              );
+              setStreamingMsgId(null);
+              setLoading(false);
+            },
+            onError: (msg, extra = {}) => {
+              if (extra?.code === 'MAG_NOT_READY') {
+                setDocuments((prev) =>
+                  prev.map((d) =>
+                    d.memoryId && memoryIds.includes(d.memoryId)
+                      ? { ...d, magReady: false, magProcessing: true }
+                      : d
+                  )
+                );
+                memoryIds.forEach((mid) => {
+                  const d = documents.find((x) => x.memoryId === mid);
+                  if (d?.fileId) pollStatus(d.fileId);
+                });
+              }
+              showToast(msg || 'Streaming query failed', true);
+              setRagMessages((prev) =>
+                prev.map((m) =>
+                  m.id === msgId
+                    ? {
+                        ...m,
+                        streaming: false,
+                        data: {
+                          ...m.data,
+                          answer: `${m.data.answer || ''}\n\n*${msg || 'Stream error'}*`,
+                        },
+                      }
+                    : m
+                )
+              );
+              setStreamingMsgId(null);
+              setLoading(false);
+            },
+          });
+          skipFinallyLoading = true;
+          return;
         }
       }
     } catch (e) {
       showToast(getError(e, 'Request failed'), true);
     } finally {
-      setLoading(false);
+      if (!skipFinallyLoading) setLoading(false);
     }
   }, [
     input,
     activeTab,
-    fileId,
-    chatbotReady,
+    documents,
+    readyMemoryIdsForChat,
+    deepThinking,
     showToast,
     pollStatus,
     appendToCurrentTab,
@@ -354,14 +480,17 @@ export default function App() {
       <Sidebar
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        fileId={fileId}
-        filename={filename}
+        documents={documents}
+        focusedFileId={focusedFileId}
+        onFocusFile={setFocusedFileId}
+        selectedChatFileIds={selectedChatFileIds}
+        onToggleChatFile={toggleChatFile}
         onPdfUpload={handlePdfUpload}
         uploading={uploading}
         userRole="user"
       />
       <div className="main-area">
-        <main className="app-main">
+        <main className={`app-main${activeTab === 'rag' ? ' app-main--rag' : ''}`}>
           {activeTab === 'edgar' && (
             <>
               {currentMessages.length === 0 && !loading && (
@@ -465,12 +594,15 @@ export default function App() {
                 <div className="welcome-card">
                   <h2 className="welcome-title">Advanced chatbot</h2>
                   <p className="welcome-text">
-                    Ask questions about your document.
-                    {fileId
-                      ? chatbotReady
-                        ? ' Your document is ready—ask anything about it.'
-                        : ' Document is still ingesting. You can ask when ready.'
-                      : ' Upload a PDF in the left sidebar to get started.'}
+                    {readyMemoryIdsForChat.length > 0
+                      ? `Analyst memory (MAG) is ready for ${readyMemoryIdsForChat.length} document${
+                          readyMemoryIdsForChat.length !== 1 ? 's' : ''
+                        }. Answers stream live from the model. Use sidebar checkboxes for chat scope.`
+                      : documents.length === 0
+                        ? 'No PDF uploaded: generic MAG chat is available now. Upload PDFs anytime to add analyst memory context.'
+                        : anyMagReady
+                          ? 'Select at least one document with ready analyst memory (checkbox in sidebar), or wait for MAG processing to finish.'
+                          : 'MAG is still building analyst memory for your PDFs. You can use Extract while you wait.'}
                   </p>
                 </div>
               )}
@@ -494,7 +626,7 @@ export default function App() {
             <AdminDashboard onError={(msg) => showToast(msg, true)} />
           )}
 
-          {loading && (
+          {loading && !streamingMsgId && (
             <div className="msg-row msg-row-animate">
               <ChatLoader />
             </div>
@@ -502,7 +634,19 @@ export default function App() {
         </main>
 
         <footer className="app-footer">
-          <div className="chatbar">
+          <div className={`chatbar${activeTab === 'rag' ? ' chatbar--rag' : ''}`}>
+            {activeTab === 'rag' && (
+              <button
+                type="button"
+                className={`chatbar-mode-pill ${deepThinking ? 'chatbar-mode-pill-active' : ''}`}
+                onClick={() => setDeepThinking((v) => !v)}
+                disabled={loading}
+                aria-pressed={deepThinking}
+                title="Toggle deeper reasoning for advanced chatbot"
+              >
+                Deep thinking {deepThinking ? 'On' : 'Off'}
+              </button>
+            )}
             {showChatInput && (
               <>
                 <CommandInput
@@ -539,7 +683,7 @@ export default function App() {
         currentRoute={lastRoute}
         fileId={fileId}
         filename={filename}
-        chatbotReady={chatbotReady}
+        chatbotReady={anyMagReady}
         chatbotProcessing={chatbotProcessing}
         workspaceItems={workspaceItems}
         activeWorkspaceId={activeWorkspaceId}
@@ -620,12 +764,13 @@ function MessageBlock({
   }
   if (msg.type === 'query' && msg.data) {
     return (
-      <AssistantBubble routeTag="Advanced chatbot" copyText={msg.data.answer}>
+      <AssistantBubble copyText={msg.data.answer}>
         <div className="output-card">
           <QueryAnswer
-            question={msg.data.question}
             answer={msg.data.answer}
+            question={msg.data.question}
             chunks={msg.data.chunks}
+            streaming={!!msg.streaming}
           />
         </div>
       </AssistantBubble>
