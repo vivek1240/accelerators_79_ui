@@ -40,6 +40,17 @@ async function start() {
     console.log(`MVP demo backend listening on port ${config.port}`);
     console.log(`Auth (dummy): /auth/signup, /auth/login; /auth/users, PATCH /auth/users/:id/access (open)`);
     console.log(`Proxy to FastAPI: ${config.fastapiUrl || '(not set)'} (localhost forced to http)`);
+    if (config.accessTokenJwtSecret) {
+      console.log(
+        'Proxy JWT: access_token verified with ACCESS_TOKEN_JWT_SECRET or JWT_SECRET (upload prefers cookie sub)'
+      );
+    } else {
+      console.log('Proxy JWT: cookie verification off (set JWT_SECRET or ACCESS_TOKEN_JWT_SECRET to enable)');
+    }
+    if (config.userUploadsRequireCookie) {
+      console.log('GET /user-uploads: requires cookie (ACCESS_TOKEN_JWT_SECRET is set)');
+    }
+    console.log('GET /user-uploads — list recorded PDFs per user (Mongo)');
   });
 }
 

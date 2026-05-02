@@ -11,6 +11,7 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
   // Allow long-running RAG queries on large documents (5 minutes by default).
   timeout: 300000,
+  withCredentials: true,
 });
 
 /** New id each full page load (FastAPI requires non-empty user_id for /upload and MAG). */
@@ -77,6 +78,13 @@ export async function upload(file) {
   form.append('file', file);
   form.append('user_id', sessionUserId);
   const { data } = await api.post('/upload', form, { timeout: 180000 });
+  return data;
+}
+
+/** List PDFs recorded for the signed-in user (requires cookie when proxy JWT secret is set). Legacy: ?user_id= */
+export async function listUserUploads(queryUserId) {
+  const params = queryUserId ? { user_id: queryUserId } : {};
+  const { data } = await api.get('/user-uploads', { params });
   return data;
 }
 
