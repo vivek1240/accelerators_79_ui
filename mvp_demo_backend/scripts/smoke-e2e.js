@@ -118,6 +118,15 @@ async function main() {
     if (owned.status === 200) {
       throw new Error('unexpected 200 from status (FastAPI should not be up in smoke)');
     }
+
+    const wrongBearer = await req('GET', '/status/not-owned-file-id', {
+      Authorization: `Bearer ${token}`,
+    });
+    if (wrongBearer.status !== 403) {
+      throw new Error(
+        `expected 403 for wrong file with bearer, got ${wrongBearer.status}: ${wrongBearer.body}`
+      );
+    }
   } finally {
     stop();
     await new Promise((r) => setTimeout(r, 500));
