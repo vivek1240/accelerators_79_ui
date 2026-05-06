@@ -336,8 +336,9 @@ router.post(
       const denied = await assertMagBodyFileAccess(req, req.body);
       if (denied) return res.status(denied.status).json(denied.json);
       const body = mergeProxyUserIntoBody(req, req.body);
-      const { data } = await fastapi.post('/mag/query', body);
-      res.json(data);
+      const response = await fastapi.post('/mag/query', body);
+      // Preserve upstream status (e.g. 202 MAG_NOT_READY) for client retry logic.
+      res.status(response.status).json(response.data);
     } catch (err) {
       res.status(err.response?.status || 502).json(err.response?.data ?? {});
     }
